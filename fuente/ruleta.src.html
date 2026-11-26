@@ -543,7 +543,7 @@ function App() {
       return { ...p, entregados, restantes: p.cantidad - entregados };
     });
     const premio = premios.find((p) => p.id === premioSel && p.restantes > 0) || premios.find((p) => p.restantes > 0) || null;
-    const elegibles = premio ? datos.asistentes.filter((a) => !gano.has(a.cedula) && !premio.excluidos.includes(a.cedula)) : [];
+    const elegibles = datos.asistentes.filter((a) => !gano.has(a.cedula) && !(premio && premio.excluidos.includes(a.cedula)));
     return { premios, premio, elegibles };
   }, [datos, premioSel]);
 
@@ -712,7 +712,7 @@ function App() {
   const n = prizes.length;
   const pendientes = premios.filter((p) => p.restantes > 0);
   const ganadores = datos.ganadores;
-  const textoBoton = spinning ? "GIRANDO…" : !cargado ? "CARGANDO…" : !premio ? (premios.length ? "PREMIOS ENTREGADOS" : "SIN PREMIOS")
+  const textoBoton = spinning ? "GIRANDO…" : !cargado ? "CARGANDO…" : !premio ? (premios.length ? "PREMIOS ENTREGADOS" : "CONFIGURA PREMIOS")
     : n < 2 ? "FALTAN PARTICIPANTES" : "¡GIRAR!";
 
   return (

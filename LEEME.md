@@ -10,6 +10,11 @@
 Inicio, configuración y ruleta piden el **PIN de administrador** una vez por pestaña.
 La inscripción es la única página pública.
 
+**Primera vez:** al abrir el inicio, la configuración o la ruleta, la app pide **crear** el PIN y lo guarda cifrado en Netlify Blobs.
+Hazlo apenas publiques, porque quien lo cree primero queda como administrador.
+Si configuras la variable `ADMIN_PIN` en Netlify, esa variable manda y el PIN creado en la app se ignora.
+¿Olvidaste el PIN? Crea `ADMIN_PIN` en Netlify y vuelve a desplegar.
+
 ## Publicar en Netlify
 
 Usa la herramienta de línea de comandos o un repositorio Git. **Arrastrar la carpeta a Netlify Drop no sirve**,

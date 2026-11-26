@@ -724,7 +724,7 @@ function App() {
       };
     });
     const premio = premios.find(p => p.id === premioSel && p.restantes > 0) || premios.find(p => p.restantes > 0) || null;
-    const elegibles = premio ? datos.asistentes.filter(a => !gano.has(a.cedula) && !premio.excluidos.includes(a.cedula)) : [];
+    const elegibles = datos.asistentes.filter(a => !gano.has(a.cedula) && !(premio && premio.excluidos.includes(a.cedula)));
     return {
       premios,
       premio,
@@ -958,7 +958,7 @@ function App() {
   const n = prizes.length;
   const pendientes = premios.filter(p => p.restantes > 0);
   const ganadores = datos.ganadores;
-  const textoBoton = spinning ? "GIRANDO…" : !cargado ? "CARGANDO…" : !premio ? premios.length ? "PREMIOS ENTREGADOS" : "SIN PREMIOS" : n < 2 ? "FALTAN PARTICIPANTES" : "¡GIRAR!";
+  const textoBoton = spinning ? "GIRANDO…" : !cargado ? "CARGANDO…" : !premio ? premios.length ? "PREMIOS ENTREGADOS" : "CONFIGURA PREMIOS" : n < 2 ? "FALTAN PARTICIPANTES" : "¡GIRAR!";
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Particles, null), /*#__PURE__*/React.createElement("main", {
     className: "stage"
   }, /*#__PURE__*/React.createElement("div", {

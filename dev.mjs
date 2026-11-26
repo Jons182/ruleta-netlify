@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { crearHandler } from "./lib/logica.mjs";
 
-process.env.ADMIN_PIN ||= "1234";
+process.env.ADMIN_PIN ??= "1234";  // ADMIN_PIN="" simula Netlify sin variable (el PIN se crea desde la app)
 const PORT = Number(process.env.PORT) || 8888;
 const PUBLIC = join(import.meta.dirname, "public");
 const TIPOS = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".svg": "image/svg+xml" };
