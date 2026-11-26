@@ -22,22 +22,44 @@
   .contador{display:flex;align-items:baseline;gap:1.5vh}
   .contador .n{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16vh;line-height:.9;color:var(--green)}
   .contador .t{font-size:3.4vh;font-weight:600}
-  .ultimos{list-style:none;display:flex;flex-wrap:wrap;gap:1.2vh;max-height:16vh;overflow:hidden}
-  .ultimos li{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:.7vh 2vh;font-size:2.4vh;font-weight:600;
-    animation:entra .5s cubic-bezier(.2,1.4,.4,1)}
-  @keyframes entra{from{opacity:0;transform:translateY(1.5vh) scale(.9)}to{opacity:1;transform:none}}
+
+  /* botón EMPEZAR: mismo estilo que GIRAR, con aro de pulso (solo transform/opacity) */
+  .empezar{position:relative;align-self:flex-start;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:5vh;letter-spacing:.1em;
+    color:#fff;border:none;border-radius:999px;padding:1.4vh 7vh;cursor:pointer;
+    background:linear-gradient(180deg,#7fca8c,var(--green) 50%,var(--green-d));
+    box-shadow:0 .8vh 0 var(--green-dd),0 1.6vh 3vh rgba(11,1,70,.25),inset 0 2px 0 rgba(255,255,255,.45);
+    text-shadow:0 2px 0 rgba(0,0,0,.15);transition:transform .12s,filter .2s}
+  .empezar::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+    border:.6vh solid rgba(86,177,103,.6);animation:pulso 2s ease-out infinite}
+  @keyframes pulso{0%{transform:scale(1);opacity:1}70%,100%{transform:scale(1.12,1.5);opacity:0}}
+  .empezar:hover{transform:translateY(-2px);filter:brightness(1.06)}
+  .empezar:active{transform:translateY(.6vh);box-shadow:0 .2vh 0 var(--green-dd)}
+  .empezar:focus-visible{outline:3px solid var(--lime);outline-offset:4px}
+
   .qr-card{background:#fff;border-radius:3vh;padding:3vh;box-shadow:0 2vh 6vh rgba(11,1,70,.2);text-align:center;border:.6vh solid var(--green)}
   .qr{width:min(62vh,42vw);aspect-ratio:1}
   .qr svg{width:100%;height:100%;display:block}
   .url{margin-top:1.5vh;font-size:2.3vh;font-weight:600;color:#0b0146;word-break:break-all}
   .tools{position:fixed;top:2.5vh;right:2.5vw;display:flex;gap:8px}
   .estado{position:fixed;bottom:2vh;left:6vw;font-size:14px}
+
+  /* salida hacia la ruleta: el contenido se va y una cortina verde crece desde el botón */
+  .saliendo .info{animation:salirIzq .5s cubic-bezier(.5,0,.75,0) forwards}
+  .saliendo .qr-card{animation:salirQR .55s cubic-bezier(.5,0,.75,0) .05s forwards}
+  .saliendo .tools{animation:desvanecer .3s forwards}
+  @keyframes salirIzq{to{transform:translateX(-30vw);opacity:0}}
+  @keyframes salirQR{to{transform:scale(.2) rotate(25deg);opacity:0}}
+  @keyframes desvanecer{to{opacity:0}}
+  .cortina{position:fixed;z-index:50;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;background:#56b167;
+    pointer-events:none;transform:scale(0);animation:cubrir .6s cubic-bezier(.6,0,.4,1) .2s forwards}
+  @keyframes cubrir{to{transform:scale(var(--s))}}
+
   @media (max-aspect-ratio:1/1){
     html,body{overflow:auto}
     .wrap{grid-template-columns:1fr;height:auto;min-height:100dvh;padding:80px 20px 40px}
     h1{font-size:38px} .paso{font-size:18px} .info .logo{height:56px}
     .contador .n{font-size:80px} .contador .t{font-size:18px}
-    .ultimos li{font-size:15px;padding:6px 12px}
+    .empezar{font-size:26px;padding:12px 40px}
     .qr{width:min(80vw,420px)} .url{font-size:14px}
     .tools{top:16px;right:16px}
   }
@@ -47,7 +69,6 @@
 <div class="tools">
   <button class="icon-btn" onclick="alternarTema()" title="Cambiar tema" aria-label="Cambiar tema">🌓</button>
   <a class="btn ghost" href="config.html">⚙️ Configuración</a>
-  <a class="btn" href="ruleta.html">🎡 Ir a la ruleta</a>
 </div>
 <main class="wrap">
   <section class="info">
@@ -55,7 +76,7 @@
     <h1>¡Inscríbete en la ruleta!</h1>
     <p class="paso">Escanea el código con la cámara de tu celular y escribe <b>tu nombre y cédula</b>.</p>
     <div class="contador" aria-live="polite"><span class="n" id="n">–</span><span class="t">inscritos</span></div>
-    <ul class="ultimos" id="ultimos"></ul>
+    <button class="empezar" id="empezar" type="button">¡EMPEZAR! 🎡</button>
   </section>
   <section class="qr-card">
     <div class="qr" id="qr" role="img" aria-label="Código QR para inscribirse"></div>
@@ -69,27 +90,34 @@
   document.getElementById("qr").innerHTML = qr.createSvgTag({ cellSize: 8, margin: 2, scalable: true });
   document.getElementById("url").textContent = destino.replace(/^https?:\/\//, "");
 
-  let conocidos = new Set();
   async function actualizar() {
     try {
       const { asistentes } = await api("estado");
       document.getElementById("n").textContent = asistentes.length;
-      const ul = document.getElementById("ultimos");
-      const recientes = asistentes.slice(-12).reverse();
-      ul.replaceChildren(...recientes.map((a) => {
-        const li = document.createElement("li");
-        li.textContent = a.nombre;
-        if (conocidos.size && !conocidos.has(a.cedula)) li.style.animationDelay = "0s"; else li.style.animation = "none";
-        return li;
-      }));
-      conocidos = new Set(asistentes.map((a) => a.cedula));
       document.getElementById("estado").textContent = "";
     } catch (e) {
       document.getElementById("estado").textContent = "⚠️ " + e.message;
     }
   }
   actualizar();
-  setInterval(() => { if (!document.hidden) actualizar(); }, 4000);
+  const sondeo = setInterval(() => { if (!document.hidden) actualizar(); }, 4000);
+
+  // EMPEZAR: animación de salida y la ruleta entra con su propia animación (#jugar)
+  document.getElementById("empezar").addEventListener("click", (ev) => {
+    clearInterval(sondeo);
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) { location.href = "ruleta.html#jugar"; return; }
+    const r = ev.currentTarget.getBoundingClientRect();
+    const x = r.left + r.width / 2, y = r.top + r.height / 2;
+    const radio = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+    const c = document.createElement("div");
+    c.className = "cortina";
+    c.style.cssText = `left:${x}px;top:${y}px;--s:${(radio * 2) / 40 + 1}`;
+    document.body.append(c);
+    document.body.classList.add("saliendo");
+    const ir = () => { location.href = "ruleta.html#jugar"; };
+    c.addEventListener("animationend", ir);
+    setTimeout(ir, 1200);  // por si el navegador pausa la animación (pestaña en segundo plano)
+  });
 </script>
 </body>
 </html>

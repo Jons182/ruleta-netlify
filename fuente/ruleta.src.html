@@ -9,6 +9,15 @@
 <link rel="icon" href="icono.png">
 <!-- tema antes de pintar + conexión con el servidor (api, PIN) -->
 <script src="comun.js"></script>
+<script>
+  // viene del botón EMPEZAR del inicio: animación de entrada (y se limpia el #jugar de la dirección)
+  if (location.hash === "#jugar") {
+    document.documentElement.classList.add("entrada");
+    history.replaceState(null, "", location.pathname);
+    // seguro: la cortina nunca se queda si el navegador pausa animaciones (todo termina antes de 1.8 s)
+    setTimeout(() => document.documentElement.classList.remove("entrada"), 1800);
+  }
+</script>
 <style>
   :root{
     --green:#56b167; --green-d:#3d8f4d; --green-dd:#2e6e3b; --lime:#a3c91d; --navy:#0b0146;
@@ -226,6 +235,15 @@
     .tools{left:3vw;right:auto;top:calc(var(--u)*3)}
     .ctrl{align-self:end}
   }
+  /* entrada desde el inicio: la cortina verde se desvanece y la ruleta llega girando */
+  html.entrada body::after{content:"";position:fixed;inset:0;z-index:50;background:#56b167;pointer-events:none;animation:cortina .7s ease-out forwards}
+  @keyframes cortina{to{opacity:0;visibility:hidden}}
+  html.entrada .wheel-area{animation:llega 1.2s cubic-bezier(.2,1.25,.4,1) .1s both}
+  @keyframes llega{from{transform:scale(.15) rotate(-300deg);opacity:0}to{transform:none;opacity:1}}
+  html.entrada .brand,html.entrada .ctrl,html.entrada .win{animation:desdeIzq .7s cubic-bezier(.2,1.3,.4,1) .45s both}
+  html.entrada .parts,html.entrada .tools{animation:desdeDer .7s cubic-bezier(.2,1.3,.4,1) .55s both}
+  @keyframes desdeIzq{from{transform:translateX(-40px);opacity:0}to{transform:none;opacity:1}}
+  @keyframes desdeDer{from{transform:translateX(40px);opacity:0}to{transform:none;opacity:1}}
   @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important}}
 </style>
 </head>
