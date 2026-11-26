@@ -86,9 +86,14 @@
 </main>
 <p class="estado muted" id="estado"></p>
 <script>
-  const destino = location.origin + "/inscripcion.html";
-  const qr = qrcode(0, "M"); qr.addData(destino); qr.make();
-  document.getElementById("qr").innerHTML = qr.createSvgTag({ cellSize: 8, margin: 2, scalable: true });
+  // el QR lleva el código del evento; al borrar inscritos el código cambia y el QR se redibuja solo
+  let eventoQR = null;
+  function pintarQR(evento) {
+    if (evento === eventoQR) return;
+    eventoQR = evento;
+    const qr = qrcode(0, "M"); qr.addData(location.origin + "/inscripcion.html?e=" + encodeURIComponent(evento)); qr.make();
+    document.getElementById("qr").innerHTML = qr.createSvgTag({ cellSize: 8, margin: 2, scalable: true });
+  }
 
   // sonido: el navegador lo permite tras el primer clic/toque en la página
   addEventListener("pointerdown", () => Sonidos.ensure(), { once: true });
@@ -100,8 +105,10 @@
   let total = null;
   async function actualizar() {
     try {
-      const { asistentes } = await api("estado");
+      const { asistentes, evento } = await api("estado");
+      pintarQR(evento);
       if (total !== null && asistentes.length > total) Sonidos.ding();  // llegó un inscrito nuevo
+      if (total !== null && asistentes.length < total) total = asistentes.length; // se borraron inscritos
       total = asistentes.length;
       document.getElementById("n").textContent = asistentes.length;
       document.getElementById("estado").textContent = "";

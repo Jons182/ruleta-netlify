@@ -135,24 +135,36 @@ const ganoCedulas = () => new Set(ganadores.map((g) => g.cedula));
 
 function mostrarError(msg) { $("error").textContent = msg; $("error").hidden = !msg; }
 
-/* ---------- guardar premios (automático) ---------- */
-let timer = null, guardando = Promise.resolve();
+/* ---------- guardar premios ---------- */
+// nombre y cantidad se guardan al pulsar Enter o salir del campo; los clics (orden, participantes) se guardan solos
+let timer = null, pendiente = false, guardando = Promise.resolve();
+const editandoPremio = () => document.activeElement?.matches?.(".premio input:not([type=checkbox])");
+const sinGuardar = () => { pendiente = true; $("guardado").textContent = "Cambios sin guardar (Enter para guardar)"; };
+const campoTexto = (alCambiar) => ({
+  onchange: guardar,                                   // se dispara al salir del campo
+  onkeydown: (e) => { if (e.key === "Enter") e.target.blur(); },
+  oninput: (e) => { if (alCambiar(e.target.value) !== false) sinGuardar(); },
+});
 function programarGuardado() {
   $("guardado").textContent = "Cambios sin guardar…";
   clearTimeout(timer);
   timer = setTimeout(guardar, 700);
 }
 async function guardar() {
-  clearTimeout(timer);
+  clearTimeout(timer); timer = null; pendiente = false;
   const envio = premios.map((p) => ({ ...p, nombre: p.nombre.trim() }));
   if (envio.some((p) => !p.nombre)) { $("guardado").textContent = "Escribe el nombre de cada premio para guardar"; return; }
   $("guardado").textContent = "Guardando…";
   guardando = api("premios", { method: "PUT", body: { premios: envio } })
-    .then((d) => { aplicar(d, false); $("guardado").textContent = "Guardado ✓"; mostrarError(""); })
+    .then((d) => {
+      asistentes = d.asistentes; ganadores = d.ganadores;
+      if (!editandoPremio()) renderPremios();          // no redibujar si ya pasaste a otro campo
+      renderAsistentes(); $("guardado").textContent = "Guardado ✓"; mostrarError("");
+    })
     .catch((e) => { $("guardado").textContent = ""; mostrarError("No se guardó: " + e.message); });
   return guardando;
 }
-window.addEventListener("beforeunload", (e) => { if (timer) { guardar(); e.preventDefault(); } });
+window.addEventListener("beforeunload", (e) => { if (timer || pendiente) { guardar(); e.preventDefault(); } });
 
 /* ---------- pintar ---------- */
 function renderPremios() {
@@ -168,10 +180,10 @@ function renderPremios() {
         h("button", { type: "button", title: "Subir", "aria-label": "Subir premio", disabled: i === 0, onclick: () => mover(i, -1) }, "▲"),
         h("button", { type: "button", title: "Bajar", "aria-label": "Bajar premio", disabled: i === premios.length - 1, onclick: () => mover(i, 1) }, "▼")),
       h("input", { class: "input", value: p.nombre, placeholder: "Nombre del premio", maxLength: 80, "aria-label": "Nombre del premio",
-        oninput: (e) => { p.nombre = e.target.value; programarGuardado(); } }),
+        ...campoTexto((v) => { p.nombre = v; }) }),
       h("input", { class: "input cant", type: "number", min: Math.max(1, ent), max: 500, value: p.cantidad, "aria-label": "Cantidad",
         title: "Cantidad (unidades a sortear)",
-        oninput: (e) => { const v = parseInt(e.target.value, 10); if (v >= Math.max(1, ent)) { p.cantidad = v; programarGuardado(); } } }),
+        ...campoTexto((txt) => { const v = parseInt(txt, 10); if (!(v >= Math.max(1, ent))) return false; p.cantidad = v; }) }),
       h("button", { class: "btn ghost quien", type: "button", "aria-expanded": abiertos.has(p.id),
         onclick: () => { abiertos.has(p.id) ? abiertos.delete(p.id) : abiertos.add(p.id); renderPremios(); } },
         `👥 Participan ${participan}`),
@@ -247,8 +259,9 @@ function renderAsistentes() {
 }
 
 /* ---------- datos del servidor ---------- */
+let evento = "";   // código del evento vigente (la inscripción manual lo necesita)
 function aplicar(d, conPremios) {
-  asistentes = d.asistentes; ganadores = d.ganadores;
+  asistentes = d.asistentes; ganadores = d.ganadores; evento = d.evento || "";
   if (conPremios) premios = d.premios.map((p) => ({ ...p, excluidos: [...p.excluidos] }));
   renderPremios(); renderAsistentes();
 }
@@ -256,7 +269,7 @@ let firma = "";  // solo se redibuja si cambió algo desde la última consulta
 async function cargar(conPremios) {
   try {
     const d = await api("estado");
-    const nueva = JSON.stringify([d.asistentes, d.ganadores]);
+    const nueva = JSON.stringify([d.asistentes, d.ganadores, d.evento]);
     if (conPremios || nueva !== firma) { firma = nueva; aplicar(d, conPremios); }
     mostrarError("");
   } catch (e) { mostrarError(e.message); }
@@ -264,8 +277,7 @@ async function cargar(conPremios) {
 cargar(true);
 // refresca inscritos y ganadores sin tocar lo que estás editando
 setInterval(() => {
-  const editando = document.activeElement?.matches?.(".premio input:not([type=checkbox])");
-  if (!document.hidden && !timer && !editando) cargar(false);
+  if (!document.hidden && !timer && !pendiente && !editandoPremio()) cargar(false);
 }, 5000);
 
 $("manual").addEventListener("submit", async (ev) => {
@@ -278,7 +290,7 @@ $("manual").addEventListener("submit", async (ev) => {
   if (!/^\d{4,15}$/.test(cedula)) { aviso("La cédula debe tener solo números (4 a 15 dígitos).", true); f.cedula.focus(); return; }
   boton.disabled = true;
   try {
-    const r = await api("registro", { method: "POST", body: { nombre, cedula }, admin: false });
+    const r = await api("registro", { method: "POST", body: { nombre, cedula, evento }, admin: false });
     f.reset(); f.nombre.focus();
     aviso("✓ " + r.nombre + " quedó inscrito");
     await cargar(false);
@@ -296,7 +308,7 @@ $("reiniciar").addEventListener("click", async () => {
   try { aplicar(await api("reiniciar", { method: "POST" }), false); } catch (e) { mostrarError(e.message); }
 });
 $("borrarTodo").addEventListener("click", async () => {
-  if (!confirm(`Se borrarán los ${asistentes.length} inscritos y los ${ganadores.length} ganadores. Los premios se conservan.\n\nEsto no se puede deshacer. Exporta a Excel antes. ¿Continuar?`)) return;
+  if (!confirm(`Se borrarán los ${asistentes.length} inscritos y los ${ganadores.length} ganadores. Los premios se conservan y se genera un QR nuevo (el anterior deja de servir).\n\nEsto no se puede deshacer. Exporta a Excel antes. ¿Continuar?`)) return;
   if (prompt('Para confirmar escribe BORRAR') !== "BORRAR") return;
   try { aplicar(await api("asistentes", { method: "DELETE" }), false); } catch (e) { mostrarError(e.message); }
 });
