@@ -1,7 +1,7 @@
 // Efectos de sonido sintetizados con Web Audio (sin archivos). Compartido por el inicio y la ruleta.
 // El navegador solo permite sonar después de un clic o toque en la página (o en el mismo sitio, en Chrome).
 const Sonidos = (() => {
-  let ctx = null, salida = null, ruidoBuf = null;
+  let ctx = null, salida = null, ruidoBuf = null, aplausoBuf = null;
   let silencio = false;
   try { silencio = localStorage.getItem("ruleta-sonido") === "off"; } catch (e) {}
 
@@ -45,7 +45,7 @@ const Sonidos = (() => {
     return s;
   }
 
-  // ráfaga de ruido filtrado: soplido / barrido / golpe de aire
+  // ráfaga de ruido filtrado: soplido, barrido o golpe de aire
   function soplo(c, t, dur, { desde = 400, hasta = 4000, vol = 0.25, q = 1.2, tipo = "bandpass", pico = 0.4 } = {}) {
     const s = ruido(c), f = c.createBiquadFilter(), g = c.createGain();
     f.type = tipo; f.Q.value = q;
@@ -55,6 +55,18 @@ const Sonidos = (() => {
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     s.connect(f); f.connect(g); g.connect(salida);
     s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.02);
+  }
+
+  // aplausos pregrabados en un solo buffer: tocarlos es 1 nodo, no 140 palmadas sueltas
+  function aplauso(c) {
+    if (aplausoBuf) return aplausoBuf;
+    const sr = c.sampleRate, buf = c.createBuffer(1, Math.floor(sr * 3.4), sr), d = buf.getChannelData(0);
+    for (let i = 0; i < 140; i++) {
+      const at = 0.05 + Math.pow(Math.random(), 1.6) * 3.2, n = Math.floor((0.05 + Math.random() * 0.04) * sr);
+      const ini = Math.floor(at * sr), amp = 0.9 * (1 - at / 3.6);
+      for (let j = 0; j < n && ini + j < d.length; j++) d[ini + j] += (Math.random() * 2 - 1) * amp * Math.exp(-j / (n * 0.25));
+    }
+    return (aplausoBuf = buf);
   }
 
   const boom = (c, t, vol = 0.6) => {
@@ -75,27 +87,26 @@ const Sonidos = (() => {
 
     // despegue al lanzar la ruleta
     girar: () => tocar((c, t) => {
+      setTimeout(() => aplauso(c), 1500);
       soplo(c, t, 0.9, { desde: 250, hasta: 3500, vol: 0.28, pico: 0.3 });
       tono(c, t, 180, 0.7, { type: "sawtooth", vol: 0.035, hasta: 720 });
     }),
 
-    // ganador: golpe + fanfarria + acorde final
     ganador: () => tocar((c, t) => {
       boom(c, t, 0.5);
       [523, 659, 784, 1047].forEach((f, i) => tono(c, t + 0.08 + i * 0.11, f, 0.3, { type: "triangle", vol: 0.13 }));
       [523, 659, 784, 1047, 1319].forEach((f) => tono(c, t + 0.56, f, 1.6, { type: "triangle", vol: 0.07, ataque: 0.02 }));
     }),
 
-    // cuando aterrizan las letras del nombre: impacto + aplausos
+    // cuando aterrizan las letras del nombre
     impacto: () => tocar((c, t) => {
       boom(c, t, 0.7);
-      for (let i = 0; i < 140; i++) {                 // aplausos: muchas palmadas cortas, cada vez más espaciadas
-        const at = t + 0.05 + Math.pow(Math.random(), 1.6) * 3.2;
-        soplo(c, at, 0.05 + Math.random() * 0.04, { desde: 1400 + Math.random() * 1600, hasta: 1200, vol: 0.12 * (1 - (at - t) / 3.6), q: 0.9, pico: 0.08 });
-      }
+      const s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+      s.buffer = aplauso(c); f.type = "bandpass"; f.frequency.value = 2000; f.Q.value = 0.7; g.gain.value = 0.35;
+      s.connect(f); f.connect(g); g.connect(salida); s.start(t);
     }),
 
-    // botón EMPEZAR del inicio: barrido hacia arriba + arpegio (dura menos que la cortina)
+    // botón EMPEZAR: dura menos que la cortina, que corta el audio al navegar
     empezar: () => tocar((c, t) => {
       soplo(c, t, 0.75, { desde: 200, hasta: 6000, vol: 0.3, pico: 0.7 });
       [392, 523, 659, 784, 1047].forEach((f, i) => tono(c, t + i * 0.07, f, 0.35, { type: "triangle", vol: 0.1 }));

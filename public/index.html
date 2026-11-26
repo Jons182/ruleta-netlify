@@ -25,7 +25,7 @@
   .contador .n{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16vh;line-height:.9;color:var(--green)}
   .contador .t{font-size:3.4vh;font-weight:600}
 
-  /* botón EMPEZAR: mismo estilo que GIRAR, con aro de pulso (solo transform/opacity) */
+  /* el pulso es un aro aparte que solo anima transform y opacity */
   .empezar{position:relative;align-self:flex-start;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:5vh;letter-spacing:.1em;
     color:#fff;border:none;border-radius:999px;padding:1.4vh 7vh;cursor:pointer;
     background:linear-gradient(180deg,#7fca8c,var(--green) 50%,var(--green-d));
@@ -107,7 +107,7 @@
     try {
       const { asistentes, evento } = await api("estado");
       pintarQR(evento);
-      if (total !== null && asistentes.length > total) Sonidos.ding();  // llegó un inscrito nuevo
+      if (total !== null && asistentes.length > total) Sonidos.ding();
       if (total !== null && asistentes.length < total) total = asistentes.length; // se borraron inscritos
       total = asistentes.length;
       document.getElementById("n").textContent = asistentes.length;
@@ -119,7 +119,7 @@
   actualizar();
   const sondeo = setInterval(() => { if (!document.hidden) actualizar(); }, 4000);
 
-  // EMPEZAR: animación de salida y la ruleta entra con su propia animación (#jugar)
+  // la ruleta lee #jugar para hacer su animación de entrada
   document.getElementById("empezar").addEventListener("click", (ev) => {
     clearInterval(sondeo);
     Sonidos.empezar();

@@ -92,7 +92,7 @@
     </section>
     <section class="card">
       <h2>👥 Asistencia <span class="badge" id="nAsist">0</span></h2>
-      <!-- inscripción manual para quien no pueda escanear el QR (mismas reglas que el formulario del QR) -->
+      <!-- inscripción manual para quien no pueda escanear: usa la misma ruta que el QR -->
       <form class="manual" id="manual" novalidate>
         <input class="input" name="nombre" placeholder="Nombre completo" maxlength="80" autocomplete="off" aria-label="Nombre completo">
         <input class="input" name="cedula" placeholder="Cédula" inputmode="numeric" maxlength="20" autocomplete="off" aria-label="Cédula">
@@ -109,7 +109,6 @@
   </div>
 </main>
 <script>
-/* ---------- estado ---------- */
 let premios = [];            // copia local editable (fuente de verdad mientras se edita)
 let asistentes = [], ganadores = [];
 const abiertos = new Set();  // premios con el panel "quién participa" abierto
@@ -135,7 +134,6 @@ const ganoCedulas = () => new Set(ganadores.map((g) => g.cedula));
 
 function mostrarError(msg) { $("error").textContent = msg; $("error").hidden = !msg; }
 
-/* ---------- guardar premios ---------- */
 // nombre y cantidad se guardan al pulsar Enter o salir del campo; los clics (orden, participantes) se guardan solos
 let timer = null, pendiente = false, guardando = Promise.resolve();
 const editandoPremio = () => document.activeElement?.matches?.(".premio input:not([type=checkbox])");
@@ -166,7 +164,6 @@ async function guardar() {
 }
 window.addEventListener("beforeunload", (e) => { if (timer || pendiente) { guardar(); e.preventDefault(); } });
 
-/* ---------- pintar ---------- */
 function renderPremios() {
   const cont = $("premios");
   if (!premios.length) { cont.replaceChildren(h("p", { class: "vacio muted" }, "Aún no hay premios. Agrega el primero.")); return; }
@@ -232,11 +229,11 @@ function marcar(p, cedulas, participa) {
   programarGuardado();
 }
 function mover(i, d) { [premios[i], premios[i + d]] = [premios[i + d], premios[i]]; renderPremios(); programarGuardado(); }
-function eliminar(i) {
+async function eliminar(i) {
   const p = premios[i], ent = entregados(p.id);
-  const msg = ent ? `"${p.nombre}" ya tiene ${ent} ganador(es). Si lo eliminas, esos ganadores siguen en el historial pero el premio desaparece. ¿Eliminar?`
-                  : `¿Eliminar el premio "${p.nombre || "sin nombre"}"?`;
-  if (!confirm(msg)) return;
+  const msg = ent ? `"${p.nombre}" ya tiene ${ent} ganador(es). Esos ganadores siguen en el historial, pero el premio desaparece.`
+                  : `Se eliminará "${p.nombre || "sin nombre"}".`;
+  if (!(await confirmar(msg, { titulo: "¿Eliminar este premio?", aceptar: "Eliminar", peligro: true }))) return;
   premios.splice(i, 1); renderPremios(); guardar();
 }
 $("agregar").addEventListener("click", () => {
@@ -258,7 +255,6 @@ function renderAsistentes() {
       onclick: () => quitar(a) }, "🗑")))) : [h("tr", {}, h("td", { colSpan: 5, class: "vacio muted" }, "Aún no hay inscritos. Proyecta la página de inicio con el QR."))]));
 }
 
-/* ---------- datos del servidor ---------- */
 let evento = "";   // código del evento vigente (la inscripción manual lo necesita)
 function aplicar(d, conPremios) {
   asistentes = d.asistentes; ganadores = d.ganadores; evento = d.evento || "";
@@ -299,21 +295,21 @@ $("manual").addEventListener("submit", async (ev) => {
 });
 
 async function quitar(a) {
-  if (!confirm(`¿Quitar a ${a.nombre} (${a.cedula}) de la asistencia? Ya no participará en la ruleta.`)) return;
+  if (!(await confirmar(`${a.nombre} (${a.cedula}) ya no participará en la ruleta.`, { titulo: "¿Quitar de la asistencia?", aceptar: "Quitar", peligro: true }))) return;
   try { aplicar(await api("asistentes/" + encodeURIComponent(a.cedula), { method: "DELETE" }), false); }
   catch (e) { mostrarError(e.message); }
 }
 $("reiniciar").addEventListener("click", async () => {
-  if (!confirm(`Se borrarán los ${ganadores.length} ganadores: todos vuelven a participar y los premios quedan sin entregar.\n\nExporta a Excel antes si quieres conservarlos. ¿Reiniciar?`)) return;
+  if (!(await confirmar(`Se borrarán los ${ganadores.length} ganadores: todos vuelven a participar y los premios quedan sin entregar.\n\nExporta a Excel antes si quieres conservarlos.`,
+    { titulo: "¿Reiniciar el sorteo?", aceptar: "Reiniciar", peligro: true }))) return;
   try { aplicar(await api("reiniciar", { method: "POST" }), false); } catch (e) { mostrarError(e.message); }
 });
 $("borrarTodo").addEventListener("click", async () => {
-  if (!confirm(`Se borrarán los ${asistentes.length} inscritos y los ${ganadores.length} ganadores. Los premios se conservan y se genera un QR nuevo (el anterior deja de servir).\n\nEsto no se puede deshacer. Exporta a Excel antes. ¿Continuar?`)) return;
-  if (prompt('Para confirmar escribe BORRAR') !== "BORRAR") return;
+  if (!(await confirmar(`Se borrarán los ${asistentes.length} inscritos y los ${ganadores.length} ganadores. Los premios se conservan y se genera un QR nuevo (el anterior deja de servir).\n\nNo se puede deshacer. Exporta a Excel antes.`,
+    { titulo: "¿Borrar inscritos y ganadores?", aceptar: "Borrar todo", peligro: true }))) return;
   try { aplicar(await api("asistentes", { method: "DELETE" }), false); } catch (e) { mostrarError(e.message); }
 });
 
-/* ---------- Excel ---------- */
 $("exportar").addEventListener("click", async () => {
   if (!window.XLSX) { mostrarError("No se pudo cargar el exportador de Excel. Revisa la conexión."); return; }
   await cargar(false);

@@ -17,7 +17,7 @@
     document.documentElement.classList.add("entrada");
     window.__entrada = true;
     history.replaceState(null, "", location.pathname);
-    // seguro: la cortina nunca se queda si el navegador pausa animaciones (todo termina antes de 1.8 s)
+    // si el navegador pausa animaciones, la cortina no se queda: todo termina antes de 1.8 s
     setTimeout(() => document.documentElement.classList.remove("entrada"), 1800);
   }
 </script>
@@ -50,7 +50,7 @@
   .particle{position:absolute;bottom:-20px;border-radius:50%;background:var(--particle);opacity:0;animation:rise linear infinite;will-change:transform,opacity}
   @keyframes rise{0%{transform:translateY(0);opacity:0}10%{opacity:1}90%{opacity:.7}100%{transform:translateY(-110vh) translateX(var(--dx));opacity:0}}
 
-  /* ---------- Escenario 16:9 ---------- */
+  /* Escenario 16:9 */
   .stage{
     position:relative; z-index:1; width:100vw; height:calc(var(--u)*100); /* alto 16:9, ancho completo: columnas pegadas a los bordes */
     padding:calc(var(--u)*3) calc(var(--u)*3.5);
@@ -141,7 +141,6 @@
   .drawer-head{display:none}
   .scrim{display:none}
 
-  /* ---------- Ruleta ---------- */
   .wheel-area{grid-area:wheel;display:flex;flex-direction:column;align-items:center;gap:calc(var(--u)*1.2);min-height:0;min-width:0}
   .wheel-box{flex:1;min-height:0;width:100%;container-type:size;display:grid;place-items:center}
   /* nombre bajo la flecha: tamaño fijo (contain) para que cambiar el texto no reacomode la página */
@@ -154,7 +153,7 @@
   .nombre-actual:empty{visibility:hidden}
   .nombre-actual.gano{background:var(--green);color:#fff;border-color:var(--lime)}
   .nombre-actual.gano::before{color:var(--lime)}
-  /* cada capa se pinta una vez; las animaciones solo usan transform/opacity (las hace la GPU) */
+  /* cada capa se pinta una vez; las animaciones solo usan transform y opacity */
   .wheel-wrap{position:relative;width:min(100cqw,100cqh);aspect-ratio:1;will-change:transform;
     animation:float 5s ease-in-out infinite;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
   .wheel-wrap::before{content:"";position:absolute;inset:0;border-radius:50%;box-shadow:0 1.5vh 3vh rgba(11,1,70,.25)}
@@ -171,7 +170,7 @@
   .fast .bulbs-b{animation-delay:-.125s}
   @keyframes blink{0%{opacity:1}50%{opacity:0}}
 
-  /* ---------- Ganador: pantalla completa, pensada para proyector ---------- */
+  /* Ganador: pantalla completa, pensada para proyector */
   @keyframes fade{from{opacity:0}to{opacity:1}}
   .overlay{position:fixed;inset:0;z-index:20;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;
     gap:3vh;padding:4vh 2vw;text-align:center;color:#fff;cursor:pointer;
@@ -207,7 +206,7 @@
   }
   @keyframes wave{0%,100%{transform:none}50%{transform:translateY(-.06em) scale(1.07)}}
   /* con el ganador en pantalla, lo de atrás no se pinta */
-  body:has(.overlay) .stage, body:has(.overlay) .particles{visibility:hidden}
+  body.con-ganador .stage, body.con-ganador .particles{visibility:hidden}
   @keyframes shake{0%,100%{transform:none}15%{transform:translate(-1.2vw,.6vh) rotate(-1.2deg)}35%{transform:translate(1.1vw,-.6vh) rotate(1deg)}
     55%{transform:translate(-.6vw,.3vh)}75%{transform:translate(.4vw,0)}}
   .win-gift{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:clamp(20px,6vh,72px);line-height:1.1;
@@ -218,7 +217,7 @@
   .win-btn:hover,.win-btn:focus-visible{background:rgba(255,255,255,.22);outline:none}
   canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:30}
 
-  /* ---------- Celular / pantallas verticales: solo la ruleta, ajustes en cajón ---------- */
+  /* Celular y pantallas verticales: solo la ruleta, los paneles van al cajón */
   @media (max-aspect-ratio:1/1), (max-height:520px){
     :root{--u:min(1dvh,2vw)}
     .stage{width:100vw;height:100dvh;padding:calc(var(--u)*2) 4vw calc(var(--u)*3);
@@ -253,7 +252,7 @@
     .tools{left:3vw;right:auto;top:calc(var(--u)*3)}
     .ctrl{align-self:end}
   }
-  /* al girar, la ruleta queda sola: lo de la izquierda sale a la izquierda y lo de la derecha a la derecha */
+  /* al girar, los paneles salen hacia su lado y la ruleta queda sola */
   .brand,.ctrl,.win,.parts,.tools{transition:transform .55s cubic-bezier(.3,1.25,.5,1),opacity .4s ease}
   .stage.girando .brand,.stage.girando .ctrl,.stage.girando .win,.stage.girando .parts,.stage.girando .tools{
     opacity:0;pointer-events:none;transition:transform .45s cubic-bezier(.5,0,.75,0),opacity .35s ease}
@@ -289,10 +288,7 @@ const {
   useCallback
 } = React;
 
-/* ============================================================
-   ⚙️ CONFIGURACIÓN — edita aquí los textos
-   (inscritos, premios y ganadores vienen del servidor: ver config.html)
-   ============================================================ */
+// Textos de la página. Inscritos, premios y ganadores vienen del servidor (config.html).
 const CONFIG = {
   titulo: "¡Gran Fiesta de Fin de Año 2026!",
   subtitulo: "Gira la ruleta y descubre quién es el próximo ganador 🎄",
@@ -302,10 +298,7 @@ const CONFIG = {
 const LOGO = "logo.png";
 const ICONO = "icono.png";
 
-/* ============================================================
-   🎲 Aleatoriedad justa: números criptográficos + muestreo por
-   rechazo (sin sesgo de módulo). Cada participante = 1/N exacto.
-   ============================================================ */
+// Azar criptográfico con muestreo por rechazo (sin sesgo de módulo): cada participante tiene 1/N exacto.
 function randomInt(n) {
   const max = Math.floor(0x100000000 / n) * n;
   const buf = new Uint32Array(1);
@@ -320,14 +313,12 @@ const indexAt = (rot, n) => {
   return Math.floor(a / (TAU / n)) % n;
 };
 
-/* ---------- Sonido: efectos compartidos en sonidos.js (Web Audio, sin archivos) ---------- */
+// Efectos en sonidos.js.
 const audio = {
   ensure: Sonidos.ensure,
   tick: Sonidos.tick,
   fanfare: Sonidos.ganador
 };
-
-/* ---------- Fondo de partículas ---------- */
 const Particles = React.memo(function Particles() {
   const items = useMemo(() => Array.from({
     length: 30
@@ -353,8 +344,6 @@ const Particles = React.memo(function Particles() {
     }
   })));
 });
-
-/* ---------- Confeti (canvas) ---------- */
 function Confetti({
   fire
 }) {
@@ -424,18 +413,15 @@ function Confetti({
     className: "confetti"
   });
 }
-
-/* ---------- Ruleta (SVG) ---------- */
-const C = 300; // centro
+const C = 300; // centro del viewBox 600x600
 const R_WHEEL = 262; // radio de los segmentos
 const polar = (r, deg) => {
   const a = deg * Math.PI / 180;
   return [C + r * Math.sin(a), C - r * Math.cos(a)];
 };
 
-/* Rendimiento: la ruleta va en capas HTML separadas. Solo el disco gira (transform en un <div>,
-   lo mueve la GPU sin redibujar) y los bombillos parpadean con opacidad de capa. Los filtros/sombras
-   quedan en capas estáticas que se pintan una sola vez. */
+// Capas separadas: solo el disco gira (transform, sin redibujar) y los bombillos parpadean con opacidad.
+// Sombras y filtros quedan en capas fijas que se pintan una sola vez.
 const BULBS = Array.from({
   length: 28
 }, (_, i) => polar(284, i * TAU / 28));
@@ -630,8 +616,6 @@ function Disc({
     pointerEvents: "none"
   })));
 }
-
-/* ---------- Pantalla del ganador: letras gigantes con zoom ---------- */
 function WinnerScreen({
   winner,
   onClose,
@@ -699,8 +683,6 @@ function WinnerScreen({
     disabled: guardando
   }, guardando ? "Guardando…" : "Continuar"));
 }
-
-/* ---------- App ---------- */
 function App() {
   const [datos, setDatos] = useState({
     asistentes: [],
@@ -718,6 +700,10 @@ function App() {
   useEffect(() => {
     Sonidos.setSilencio(muted);
   }, [muted]);
+  // con el ganador en pantalla, lo de atrás deja de pintarse
+  useEffect(() => {
+    document.body.classList.toggle("con-ganador", !!winner);
+  }, [winner]);
   // llegada desde EMPEZAR (suena si el navegador ya permite audio en este sitio)
   useEffect(() => {
     if (window.__entrada) Sonidos.llegada();
@@ -744,7 +730,7 @@ function App() {
     } catch (e) {}
   }, [theme]);
 
-  /* ---------- quién participa en el premio actual ---------- */
+  // quién participa en el premio actual
   const {
     premios,
     premio,
@@ -797,8 +783,6 @@ function App() {
     idx: -1,
     lista: null
   });
-
-  /* ---------- datos del servidor ---------- */
   const latest = useRef({});
   const firmaRef = useRef("");
   const cargar = useCallback(async () => {
@@ -825,10 +809,12 @@ function App() {
     }, 5000);
     return () => clearInterval(t);
   }, [cargar]);
+  const flickAnim = useRef(null);
   const flick = () => {
     const el = pointerRef.current;
     if (!el || !el.animate) return;
-    el.animate([{
+    flickAnim.current?.cancel(); // una sola animación de la flecha a la vez
+    flickAnim.current = el.animate([{
       transform: "rotate(0deg)"
     }, {
       transform: "rotate(-26deg)"
@@ -839,11 +825,17 @@ function App() {
       easing: "ease-out"
     });
   };
-
-  /* bucle de animación continuo */
   useEffect(() => {
     let raf,
-      last = performance.now();
+      last = performance.now(),
+      ultimoGolpe = 0;
+    // a máxima velocidad cambia de nombre casi cada cuadro: un golpe cada 45 ms basta y no satura el audio
+    const golpe = now => {
+      if (now - ultimoGolpe < 45) return;
+      ultimoGolpe = now;
+      flick();
+      audio.tick();
+    };
     // nombre bajo la flecha: solo se toca el DOM cuando cambia el nombre (sin re-render de React)
     const pintarNombre = (idx, gano) => {
       const el = nombreRef.current,
@@ -868,8 +860,7 @@ function App() {
         const idx = indexAt(rot.current, nRef.current);
         if (idx !== lastIdx.current) {
           lastIdx.current = idx;
-          flick();
-          audio.tick();
+          golpe(now);
         }
         if (t >= 1) {
           anim.current = null;
@@ -888,12 +879,9 @@ function App() {
           audio.fanfare();
         }
       } else {
-        if (!drag.current && !latest.current.winner) rot.current += dt * 0.004; // giro lento de reposo (pausado con el ganador en pantalla)
+        if (!drag.current && !latest.current.winner) rot.current += dt * 0.004; // giro lento de reposo, pausado con el ganador en pantalla
         const idx = indexAt(rot.current, nRef.current);
-        if (drag.current && idx !== lastIdx.current) {
-          flick();
-          audio.tick();
-        }
+        if (drag.current && idx !== lastIdx.current) golpe(now);
         lastIdx.current = idx;
       }
       pintarNombre(lastIdx.current);
@@ -909,7 +897,7 @@ function App() {
     audio.ensure();
     Sonidos.girar();
     setDrawer(false);
-    const idx = randomInt(n); // 🎯 el ganador se decide aquí, 1/N para cada uno
+    const idx = randomInt(n); // el ganador se decide aquí, 1/N para cada uno
     const s = TAU / n;
     const jitter = (Math.random() - 0.5) * s * 0.7; // punto de parada dentro del segmento (solo estético)
     const targetMod = ((TAU - ((idx + 0.5) * s + jitter)) % TAU + TAU) % TAU;
@@ -975,8 +963,6 @@ function App() {
       onPointerCancel: endDrag
     };
   }, []);
-
-  /* barra espaciadora */
   useEffect(() => {
     const onKey = e => {
       if (e.code === "Space" && !/TEXTAREA|INPUT|BUTTON|SELECT/.test(document.activeElement.tagName)) {
@@ -1008,13 +994,13 @@ function App() {
       setError("");
     } catch (e) {
       if (e.status === 409) {
-        // el servidor lo rechaza (p. ej. el premio se borró): no sirve reintentar
-        alert("No se registró el ganador: " + e.message);
+        // rechazo del servidor (p. ej. premio borrado): reintentar no sirve
+        avisar(e.message, "No se registró el ganador");
         latest.current.winner = null;
         setWinner(null);
         cargar();
       } else {
-        alert("No se pudo guardar el ganador (" + e.message + ").\nRevisa la conexión y pulsa Continuar otra vez.");
+        avisar("Revisa la conexión y pulsa Continuar otra vez.\n(" + e.message + ")", "No se pudo guardar el ganador");
       }
     } finally {
       setGuardando(false);

@@ -20,7 +20,6 @@ const store = {
 };
 const api = crearHandler(() => store);
 
-// `node dev.mjs 100`: arranca con N inscritos inventados (misma ruta y validaciones que el QR)
 const SEMILLA = Math.min(Number(process.argv[2]) || 0, 2000);
 if (SEMILLA) {
   const nombres = ["Ana", "Carlos", "Luisa", "Jorge", "María Fernanda", "Andrés", "Paola", "Daniel", "Sofía", "Camilo", "Valentina", "Juan Pablo",
