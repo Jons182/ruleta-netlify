@@ -117,6 +117,10 @@
   .winners .t small{display:block;font-weight:400;color:var(--muted)}
   .winners .h{margin-left:auto;font-size:calc(var(--u)*1.5);color:var(--muted);flex:none}
 
+  .plegar{margin-left:auto;white-space:nowrap;flex:none;font-family:'Barlow',sans-serif;font-size:calc(var(--u)*1.6);font-weight:600;cursor:pointer;
+    background:var(--surface2);color:var(--text);border:1px solid var(--line);border-radius:999px;padding:calc(var(--u)*.4) calc(var(--u)*1.2)}
+  .plegar:hover{border-color:var(--green)}
+  .plegar:focus-visible{outline:3px solid var(--lime);outline-offset:2px}
   .plist{list-style:none;flex:0 1 auto;min-height:0;overflow:auto;margin:calc(var(--u)*1) 0;border-radius:calc(var(--u)*1.4);
     background:var(--surface2);padding:calc(var(--u)*1) calc(var(--u)*1.4);font-size:calc(var(--u)*1.8);line-height:1.45}
   .plist:empty{display:none}
@@ -138,7 +142,18 @@
   .scrim{display:none}
 
   /* ---------- Ruleta ---------- */
-  .wheel-area{grid-area:wheel;container-type:size;display:grid;place-items:center;min-height:0}
+  .wheel-area{grid-area:wheel;display:flex;flex-direction:column;align-items:center;gap:calc(var(--u)*1.2);min-height:0;min-width:0}
+  .wheel-box{flex:1;min-height:0;width:100%;container-type:size;display:grid;place-items:center}
+  /* nombre bajo la flecha: tamaño fijo (contain) para que cambiar el texto no reacomode la página */
+  .nombre-actual{flex:none;height:calc(var(--u)*6.5);width:min(100%,calc(var(--u)*72));contain:strict;
+    padding:0 calc(var(--u)*3);border-radius:999px;background:var(--surface);border:calc(var(--u)*.35) solid var(--green);
+    box-shadow:var(--shadow);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:calc(var(--u)*3.8);
+    line-height:calc(var(--u)*5.8);text-align:center;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    transition:background-color .3s,color .3s,border-color .3s}
+  .nombre-actual::before{content:"▲ ";color:var(--green);font-size:.6em;vertical-align:.15em}
+  .nombre-actual:empty{visibility:hidden}
+  .nombre-actual.gano{background:var(--green);color:#fff;border-color:var(--lime)}
+  .nombre-actual.gano::before{color:var(--lime)}
   /* cada capa se pinta una vez; las animaciones solo usan transform/opacity (las hace la GPU) */
   .wheel-wrap{position:relative;width:min(100cqw,100cqh);aspect-ratio:1;will-change:transform;
     animation:float 5s ease-in-out infinite;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
@@ -238,6 +253,13 @@
     .tools{left:3vw;right:auto;top:calc(var(--u)*3)}
     .ctrl{align-self:end}
   }
+  /* al girar, la ruleta queda sola: lo de la izquierda sale a la izquierda y lo de la derecha a la derecha */
+  .brand,.ctrl,.win,.parts,.tools{transition:transform .55s cubic-bezier(.3,1.25,.5,1),opacity .4s ease}
+  .stage.girando .brand,.stage.girando .ctrl,.stage.girando .win,.stage.girando .parts,.stage.girando .tools{
+    opacity:0;pointer-events:none;transition:transform .45s cubic-bezier(.5,0,.75,0),opacity .35s ease}
+  .stage.girando .brand,.stage.girando .ctrl,.stage.girando .win{transform:translateX(-110%)}
+  .stage.girando .parts,.stage.girando .tools{transform:translateX(110%)}
+
   /* entrada desde el inicio: la cortina verde se desvanece y la ruleta llega girando */
   html.entrada body::after{content:"";position:fixed;inset:0;z-index:50;background:#56b167;pointer-events:none;animation:cortina .7s ease-out forwards}
   @keyframes cortina{to{opacity:0;visibility:hidden}}
@@ -247,7 +269,7 @@
   html.entrada .parts,html.entrada .tools{animation:desdeDer .7s cubic-bezier(.2,1.3,.4,1) .55s both}
   @keyframes desdeIzq{from{transform:translateX(-40px);opacity:0}to{transform:none;opacity:1}}
   @keyframes desdeDer{from{transform:translateX(40px);opacity:0}to{transform:none;opacity:1}}
-  @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important}}
+  @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 </style>
 </head>
 <body>
@@ -530,6 +552,9 @@ function App() {
   useEffect(() => { if (window.__entrada) Sonidos.llegada(); }, []);
   const [theme, setTheme] = useState(document.documentElement.dataset.theme);
   const [drawer, setDrawer] = useState(false);
+  // lista de participantes plegable (se recuerda en este navegador); oculta tampoco se dibuja
+  const [verLista, setVerLista] = useState(() => { try { return localStorage.getItem("ruleta-lista") !== "oculta"; } catch (e) { return true; } });
+  useEffect(() => { try { localStorage.setItem("ruleta-lista", verLista ? "visible" : "oculta"); } catch (e) {} }, [verLista]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -567,6 +592,9 @@ function App() {
   const elegRef = useRef(elegibles);
   const premioRef = useRef(premio);
   nRef.current = prizes.length; elegRef.current = elegibles; premioRef.current = premio;
+  const nombreRef = useRef(null);
+  const labelsRef = useRef(prizes); labelsRef.current = prizes;
+  const mostrado = useRef({ idx: -1, lista: null });
 
   /* ---------- datos del servidor ---------- */
   const latest = useRef({});
@@ -599,6 +627,14 @@ function App() {
   /* bucle de animación continuo */
   useEffect(() => {
     let raf, last = performance.now();
+    // nombre bajo la flecha: solo se toca el DOM cuando cambia el nombre (sin re-render de React)
+    const pintarNombre = (idx, gano) => {
+      const el = nombreRef.current, lista = labelsRef.current, m = mostrado.current;
+      if (!el || (idx === m.idx && lista === m.lista && !gano)) return;
+      mostrado.current = { idx, lista };
+      el.textContent = lista.length >= 2 ? lista[idx] || "" : "";
+      el.classList.toggle("gano", !!gano);
+    };
     const frame = (now) => {
       const dt = Math.min(now - last, 50); last = now;
       const a = anim.current;
@@ -610,7 +646,9 @@ function App() {
         if (idx !== lastIdx.current) { lastIdx.current = idx; flick(); audio.tick(); }
         if (t >= 1) {
           anim.current = null;
-          const ganador = elegRef.current[indexAt(rot.current, nRef.current)];
+          const final = indexAt(rot.current, nRef.current);
+          const ganador = elegRef.current[final];
+          pintarNombre(final, true);
           const p = premioRef.current;
           setSpinning(false);
           setWinner({ name: ganador.nombre, cedula: ganador.cedula, premioId: p.id, premio: p.nombre });
@@ -623,6 +661,7 @@ function App() {
         if (drag.current && idx !== lastIdx.current) { flick(); audio.tick(); }
         lastIdx.current = idx;
       }
+      pintarNombre(lastIdx.current);
       if (wheelRef.current) wheelRef.current.style.transform = `rotate(${rot.current}deg)`;
       raf = requestAnimationFrame(frame);
     };
@@ -722,7 +761,7 @@ function App() {
   return (
     <>
       <Particles />
-      <main className="stage">
+      <main className={"stage" + (spinning ? " girando" : "")}>
         <div className="tools">
           <button className="icon-btn" onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
                   title="Cambiar tema" aria-label="Cambiar tema">{theme === "dark" ? "☀️" : "🌙"}</button>
@@ -739,8 +778,11 @@ function App() {
         </header>
 
         <section className="wheel-area">
-          <Wheel prizes={prizes} wheelRef={wheelRef} pointerRef={pointerRef} spinning={spinning}
-                 dragging={dragging} dragProps={dragProps} />
+          <div className="wheel-box">
+            <Wheel prizes={prizes} wheelRef={wheelRef} pointerRef={pointerRef} spinning={spinning}
+                   dragging={dragging} dragProps={dragProps} />
+          </div>
+          <div className="nombre-actual" ref={nombreRef} aria-hidden="true"></div>
         </section>
 
         <section className="ctrl">
@@ -781,12 +823,15 @@ function App() {
           </div>
 
           <div className="card parts">
-            <h2>👥 Participan <span className="badge">{n}</span></h2>
+            <h2>👥 Participan <span className="badge">{n}</span>
+              <button className="plegar" onClick={() => setVerLista((v) => !v)} aria-expanded={verLista}
+                      title={verLista ? "Ocultar lista" : "Mostrar lista"}>{verLista ? "Ocultar ▴" : "Mostrar ▾"}</button>
+            </h2>
             {error && <p className="err" role="alert">⚠️ {error}</p>}
             {premio && <p className="empty">en «{premio.nombre}»</p>}
-            <ul className="plist">
+            {verLista && <ul className="plist">
               {prizes.map((nombre, i) => <li key={elegibles[i].cedula}>{nombre}</li>)}
-            </ul>
+            </ul>}
             <div className="row">
               <a className="btn" href="config.html">⚙️ Configurar</a>
               <a className="btn ghost" href="index.html">📱 Inicio (QR)</a>

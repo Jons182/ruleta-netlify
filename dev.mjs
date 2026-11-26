@@ -1,4 +1,4 @@
-// Servidor de prueba local (no se usa en Netlify): `node dev.mjs` y abre http://localhost:8888
+// Servidor de prueba local (no se usa en Netlify): `node dev.mjs` (o `node dev.mjs 100` con 100 inscritos de prueba)
 // Guarda los datos en memoria; se pierden al cerrarlo. PIN local: 1234 (o la variable ADMIN_PIN).
 import http from "node:http";
 import { readFile } from "node:fs/promises";
@@ -14,11 +14,29 @@ const mem = new Map();
 const store = {
   get: async (k) => (mem.has(k) ? JSON.parse(mem.get(k)) : null),
   setJSON: async (k, v) => { mem.set(k, JSON.stringify(v)); },
-    set: async (k, v) => { mem.set(k, JSON.stringify(v)); },
+  set: async (k, v) => { mem.set(k, JSON.stringify(v)); },
   delete: async (k) => { mem.delete(k); },
   list: async ({ prefix = "" } = {}) => ({ blobs: [...mem.keys()].filter((k) => k.startsWith(prefix)).map((key) => ({ key })) }),
 };
 const api = crearHandler(() => store);
+
+// `node dev.mjs 100`: arranca con N inscritos inventados (misma ruta y validaciones que el QR)
+const SEMILLA = Math.min(Number(process.argv[2]) || 0, 2000);
+if (SEMILLA) {
+  const nombres = ["Ana", "Carlos", "Luisa", "Jorge", "María Fernanda", "Andrés", "Paola", "Daniel", "Sofía", "Camilo", "Valentina", "Juan Pablo",
+    "Laura", "Santiago", "Natalia", "Felipe", "Daniela", "Sebastián", "Carolina", "Mateo", "Juliana", "Alejandro", "Mariana", "Diego", "Isabella",
+    "Nicolás", "Gabriela", "Óscar", "Ximena", "Ricardo"];
+  const apellidos = ["Martínez", "Pérez", "Gómez", "Rodríguez", "Ruiz", "Castillo", "Herrera", "Ortiz", "Vargas", "Torres", "Mora", "Rojas",
+    "Díaz", "Romero", "Suárez", "Jiménez", "Navarro", "Morales", "Ramírez", "Castro", "Mejía", "Ospina", "Salazar", "Cárdenas", "Peña",
+    "Guerrero", "Rincón", "Ávila", "Barrios", "De la Hoz"];
+  for (let i = 0; i < SEMILLA; i++) {
+    const vuelta = Math.floor(i / nombres.length);   // cada vuelta cambia los apellidos para no repetir nombres
+    const nombre = `${nombres[i % nombres.length]} ${apellidos[(i + vuelta * 7) % apellidos.length]} ${apellidos[(i * 13 + vuelta * 11 + 5) % apellidos.length]}`;
+    const r = await api(new Request("http://localhost/api/registro", { method: "POST", body: JSON.stringify({ nombre, cedula: String(1000000 + i * 7919) }) }));
+    if (r.status !== 201) throw new Error(`Siembra: ${nombre} → ${r.status} ${await r.text()}`);
+  }
+  console.log(`Sembrados ${SEMILLA} inscritos de prueba`);
+}
 
 http.createServer(async (req, res) => {
   try {
