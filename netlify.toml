@@ -4,3 +4,9 @@
 
 [functions]
   node_bundler = "esbuild"
+
+# librerías fijas (no cambian): el navegador las guarda un año y no las vuelve a pedir
+[[headers]]
+  for = "/vendor/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

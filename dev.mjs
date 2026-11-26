@@ -14,6 +14,7 @@ const mem = new Map();
 const store = {
   get: async (k) => (mem.has(k) ? JSON.parse(mem.get(k)) : null),
   setJSON: async (k, v) => { mem.set(k, JSON.stringify(v)); },
+    set: async (k, v) => { mem.set(k, JSON.stringify(v)); },
   delete: async (k) => { mem.delete(k); },
   list: async ({ prefix = "" } = {}) => ({ blobs: [...mem.keys()].filter((k) => k.startsWith(prefix)).map((key) => ({ key })) }),
 };

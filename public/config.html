@@ -6,10 +6,11 @@
 <title>Configuración · Ruleta de Fin de Año</title>
 <link rel="icon" href="icono.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="marca.css">
 <script src="comun.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+<script src="vendor/xlsx-js-style.min.js" defer></script>
 <style>
   header{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:20px 24px;max-width:1280px;margin:0 auto}
   header h1{font-size:32px;margin-right:auto}
@@ -52,6 +53,11 @@
   .acciones-evento .btn{width:100%}
   .sep{height:1px;background:var(--line);margin:6px 0}
   .lado{display:flex;flex-direction:column;gap:20px}
+  .manual{display:grid;grid-template-columns:minmax(0,1fr) 130px auto;gap:8px;margin-bottom:12px}
+  .manual .input{padding:9px 12px}
+  @media (max-width:480px){.manual{grid-template-columns:1fr 1fr}.manual .btn{grid-column:1 / -1}}
+  .ok-msg{font-size:14px;color:var(--accent);font-weight:600;margin:-4px 0 10px}
+  .ok-msg.mal{color:var(--red)}
   .vacio{padding:18px;text-align:center}
 </style>
 </head>
@@ -86,6 +92,13 @@
     </section>
     <section class="card">
       <h2>👥 Asistencia <span class="badge" id="nAsist">0</span></h2>
+      <!-- inscripción manual para quien no pueda escanear el QR (mismas reglas que el formulario del QR) -->
+      <form class="manual" id="manual" novalidate>
+        <input class="input" name="nombre" placeholder="Nombre completo" maxlength="80" autocomplete="off" aria-label="Nombre completo">
+        <input class="input" name="cedula" placeholder="Cédula" inputmode="numeric" maxlength="20" autocomplete="off" aria-label="Cédula">
+        <button class="btn" type="submit">＋ Inscribir</button>
+      </form>
+      <p class="ok-msg" id="okManual" aria-live="polite"></p>
       <div class="tabla">
         <table>
           <thead><tr><th>#</th><th>Nombre</th><th>Cédula</th><th>Hora</th><th></th></tr></thead>
@@ -239,9 +252,14 @@ function aplicar(d, conPremios) {
   if (conPremios) premios = d.premios.map((p) => ({ ...p, excluidos: [...p.excluidos] }));
   renderPremios(); renderAsistentes();
 }
+let firma = "";  // solo se redibuja si cambió algo desde la última consulta
 async function cargar(conPremios) {
-  try { aplicar(await api("estado"), conPremios); mostrarError(""); }
-  catch (e) { mostrarError(e.message); }
+  try {
+    const d = await api("estado");
+    const nueva = JSON.stringify([d.asistentes, d.ganadores]);
+    if (conPremios || nueva !== firma) { firma = nueva; aplicar(d, conPremios); }
+    mostrarError("");
+  } catch (e) { mostrarError(e.message); }
 }
 cargar(true);
 // refresca inscritos y ganadores sin tocar lo que estás editando
@@ -249,6 +267,24 @@ setInterval(() => {
   const editando = document.activeElement?.matches?.(".premio input:not([type=checkbox])");
   if (!document.hidden && !timer && !editando) cargar(false);
 }, 5000);
+
+$("manual").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const f = ev.currentTarget, boton = f.querySelector("button");
+  const nombre = f.nombre.value.trim(), cedula = f.cedula.value.replace(/[.\s-]/g, "");
+  const aviso = (msg, mal) => { $("okManual").textContent = msg; $("okManual").classList.toggle("mal", !!mal); };
+  aviso("");
+  if (nombre.length < 3) { aviso("Escribe el nombre completo.", true); f.nombre.focus(); return; }
+  if (!/^\d{4,15}$/.test(cedula)) { aviso("La cédula debe tener solo números (4 a 15 dígitos).", true); f.cedula.focus(); return; }
+  boton.disabled = true;
+  try {
+    const r = await api("registro", { method: "POST", body: { nombre, cedula }, admin: false });
+    f.reset(); f.nombre.focus();
+    aviso("✓ " + r.nombre + " quedó inscrito");
+    await cargar(false);
+  } catch (e) { aviso(e.message, true); }
+  finally { boton.disabled = false; }
+});
 
 async function quitar(a) {
   if (!confirm(`¿Quitar a ${a.nombre} (${a.cedula}) de la asistencia? Ya no participará en la ruleta.`)) return;
@@ -270,20 +306,42 @@ $("exportar").addEventListener("click", async () => {
   if (!window.XLSX) { mostrarError("No se pudo cargar el exportador de Excel. Revisa la conexión."); return; }
   await cargar(false);
   const libro = XLSX.utils.book_new();
-  const asis = asistentes.map((a, i) => ({ "N°": i + 1, "Nombre": a.nombre, "Cédula": a.cedula, "Fecha y hora de inscripción": fmtHora(a.hora) }));
+  const asis = asistentes.map((a, i) => [i + 1, a.nombre, a.cedula, fmtHora(a.hora)]);
   const orden = new Map(premios.map((p, i) => [p.id, i]));
   const unidad = {};
   const gan = [...ganadores]
     .sort((a, b) => (orden.get(a.premioId) ?? 999) - (orden.get(b.premioId) ?? 999) || a.hora.localeCompare(b.hora))
-    .map((g) => ({ "Premio": g.premio, "Unidad": (unidad[g.premioId] = (unidad[g.premioId] || 0) + 1),
-                   "Ganador": g.nombre, "Cédula": g.cedula, "Fecha y hora": fmtHora(g.hora) }));
-  const hoja = (filas, cols, anchos) => {
-    const ws = XLSX.utils.json_to_sheet(filas, { header: cols });
+    .map((g) => [g.premio, (unidad[g.premioId] = (unidad[g.premioId] || 0) + 1), g.nombre, g.cedula, fmtHora(g.hora)]);
+
+  // estilo con los colores del logo: título azul marino, encabezado verde, filas alternas verde claro
+  const VERDE = "56B167", NAVY = "0B0146", CLARO = "EEF6EC", LINEA = { style: "thin", color: { rgb: "C9E2C4" } };
+  const borde = { top: LINEA, bottom: LINEA, left: LINEA, right: LINEA };
+  const hoja = (titulo, cols, filas, anchos, centradas = []) => {
+    const ws = XLSX.utils.aoa_to_sheet([
+      ["Soluciones Hospitalarias de la Costa S.A.S · " + titulo],
+      ["Ruleta de Fin de Año · exportado el " + fmtHora(new Date().toISOString())],
+      [], cols, ...filas,
+    ]);
+    const ultima = cols.length - 1;
+    ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: ultima } }, { s: { r: 1, c: 0 }, e: { r: 1, c: ultima } }];
     ws["!cols"] = anchos.map((wch) => ({ wch }));
+    ws["!rows"] = [{ hpt: 28 }, { hpt: 18 }, { hpt: 6 }, { hpt: 22 }];
+    ws["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 3, c: 0 }, e: { r: 3 + filas.length, c: ultima } }) };
+    const estilo = (r, c, s) => { const ref = XLSX.utils.encode_cell({ r, c }); (ws[ref] ||= { t: "s", v: "" }).s = s; };
+    estilo(0, 0, { font: { bold: true, sz: 16, color: { rgb: NAVY } } });
+    estilo(1, 0, { font: { italic: true, sz: 10, color: { rgb: "5D5A7A" } } });
+    cols.forEach((_, c) => estilo(3, c, {
+      font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: VERDE } }, border: borde,
+      alignment: { horizontal: "center", vertical: "center" },
+    }));
+    filas.forEach((fila, i) => fila.forEach((_, c) => estilo(4 + i, c, {
+      fill: { fgColor: { rgb: i % 2 ? CLARO : "FFFFFF" } }, border: borde, font: { color: { rgb: NAVY } },
+      alignment: { vertical: "center", horizontal: centradas.includes(c) ? "center" : "left" },
+    })));
     return ws;
   };
-  XLSX.utils.book_append_sheet(libro, hoja(asis, ["N°", "Nombre", "Cédula", "Fecha y hora de inscripción"], [6, 36, 16, 26]), "Asistencia");
-  XLSX.utils.book_append_sheet(libro, hoja(gan, ["Premio", "Unidad", "Ganador", "Cédula", "Fecha y hora"], [30, 8, 36, 16, 22]), "Ganadores");
+  XLSX.utils.book_append_sheet(libro, hoja("Asistencia", ["N°", "Nombre", "Cédula", "Fecha y hora de inscripción"], asis, [6, 38, 16, 26], [0, 2]), "Asistencia");
+  XLSX.utils.book_append_sheet(libro, hoja("Ganadores", ["Premio", "Unidad", "Ganador", "Cédula", "Fecha y hora"], gan, [30, 9, 38, 16, 22], [1, 3]), "Ganadores");
   XLSX.writeFile(libro, `ruleta-asistencia-y-ganadores-${new Date().toISOString().slice(0, 10)}.xlsx`);
 });
 </script>

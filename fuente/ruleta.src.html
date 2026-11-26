@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ruleta de Fin de Año</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="icon" href="icono.png">
 <!-- tema antes de pintar + conexión con el servidor (api, PIN) -->
@@ -250,8 +251,8 @@
 <body>
 <div id="root"></div>
 
-<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
-<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+<script src="vendor/react.production.min.js"></script>
+<script src="vendor/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
 
 <script type="text/babel">
@@ -589,12 +590,16 @@ function App() {
 
   /* ---------- datos del servidor ---------- */
   const latest = useRef({});
+  const firmaRef = useRef("");
   const cargar = useCallback(async () => {
     try {
       const d = await api("estado");
       // nunca cambiar la lista mientras gira o mientras se muestra un ganador
       if (anim.current || latest.current.winner) return;
-      setDatos(d); setError(""); setCargado(true);
+      // misma respuesta que la anterior: no se toca el estado (evita re-renders cada 5 s)
+      const firma = JSON.stringify(d);
+      if (firma !== firmaRef.current) { firmaRef.current = firma; setDatos(d); }
+      setError(""); setCargado(true);
     } catch (e) { setError(e.message); }
   }, []);
   useEffect(() => {
@@ -716,7 +721,7 @@ function App() {
     try {
       const d = await api("ganador", { method: "POST", body: { premioId: winner.premioId, cedula: winner.cedula } });
       latest.current.winner = null;
-      setDatos(d); setWinner(null); setError("");
+      firmaRef.current = JSON.stringify(d); setDatos(d); setWinner(null); setError("");
     } catch (e) {
       if (e.status === 409) {                         // el servidor lo rechaza (p. ej. el premio se borró): no sirve reintentar
         alert("No se registró el ganador: " + e.message);
