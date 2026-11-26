@@ -10,6 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="marca.css">
 <script src="comun.js"></script>
+<script src="sonidos.js"></script>
 <script src="vendor/qrcode.min.js"></script>
 <style>
   html,body{height:100%;overflow:hidden}
@@ -68,6 +69,7 @@
 <body>
 <div class="tools">
   <button class="icon-btn" onclick="alternarTema()" title="Cambiar tema" aria-label="Cambiar tema">🌓</button>
+  <button class="icon-btn" id="sonido" type="button" title="Sonido" aria-label="Sonido"></button>
   <a class="btn ghost" href="config.html">⚙️ Configuración</a>
 </div>
 <main class="wrap">
@@ -88,9 +90,19 @@
   const qr = qrcode(0, "M"); qr.addData(destino); qr.make();
   document.getElementById("qr").innerHTML = qr.createSvgTag({ cellSize: 8, margin: 2, scalable: true });
 
+  // sonido: el navegador lo permite tras el primer clic/toque en la página
+  addEventListener("pointerdown", () => Sonidos.ensure(), { once: true });
+  const btnSonido = document.getElementById("sonido");
+  const pintarSonido = () => { btnSonido.textContent = Sonidos.silencio ? "🔇" : "🔊"; };
+  btnSonido.addEventListener("click", () => { Sonidos.setSilencio(!Sonidos.silencio); pintarSonido(); Sonidos.pop(); });
+  pintarSonido();
+
+  let total = null;
   async function actualizar() {
     try {
       const { asistentes } = await api("estado");
+      if (total !== null && asistentes.length > total) Sonidos.ding();  // llegó un inscrito nuevo
+      total = asistentes.length;
       document.getElementById("n").textContent = asistentes.length;
       document.getElementById("estado").textContent = "";
     } catch (e) {
@@ -103,6 +115,7 @@
   // EMPEZAR: animación de salida y la ruleta entra con su propia animación (#jugar)
   document.getElementById("empezar").addEventListener("click", (ev) => {
     clearInterval(sondeo);
+    Sonidos.empezar();
     if (matchMedia("(prefers-reduced-motion: reduce)").matches) { location.href = "ruleta.html#jugar"; return; }
     const r = ev.currentTarget.getBoundingClientRect();
     const x = r.left + r.width / 2, y = r.top + r.height / 2;

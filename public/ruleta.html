@@ -10,10 +10,12 @@
 <link rel="icon" href="icono.png">
 <!-- tema antes de pintar + conexión con el servidor (api, PIN) -->
 <script src="comun.js"></script>
+<script src="sonidos.js"></script>
 <script>
   // viene del botón EMPEZAR del inicio: animación de entrada (y se limpia el #jugar de la dirección)
   if (location.hash === "#jugar") {
     document.documentElement.classList.add("entrada");
+    window.__entrada = true;
     history.replaceState(null, "", location.pathname);
     // seguro: la cortina nunca se queda si el navegador pausa animaciones (todo termina antes de 1.8 s)
     setTimeout(() => document.documentElement.classList.remove("entrada"), 1800);
@@ -296,44 +298,12 @@ const indexAt = (rot, n) => {
   return Math.floor(a / (TAU / n)) % n;
 };
 
-/* ---------- Sonido (WebAudio, sin archivos) ---------- */
-function useAudio() {
-  const ctxRef = useRef(null);
-  const mutedRef = useRef(false);
-  const ensure = () => {
-    if (!ctxRef.current) {
-      try {
-        ctxRef.current = new (window.AudioContext || window.webkitAudioContext)();
-      } catch (e) {}
-    }
-    if (ctxRef.current && ctxRef.current.state === "suspended") ctxRef.current.resume();
-  };
-  const beep = (freq, dur, type = "square", vol = 0.05, when = 0) => {
-    const c = ctxRef.current;
-    if (!c || mutedRef.current) return;
-    const o = c.createOscillator(),
-      g = c.createGain();
-    o.type = type;
-    o.frequency.value = freq;
-    const t = c.currentTime + when;
-    g.gain.setValueAtTime(vol, t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g);
-    g.connect(c.destination);
-    o.start(t);
-    o.stop(t + dur);
-  };
-  const tick = () => beep(880 + Math.random() * 120, 0.04, "square", 0.04);
-  const fanfare = () => {
-    [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => beep(f, 0.28, "triangle", 0.12, i * 0.12));
-  };
-  return {
-    ensure,
-    tick,
-    fanfare,
-    mutedRef
-  };
-}
+/* ---------- Sonido: efectos compartidos en sonidos.js (Web Audio, sin archivos) ---------- */
+const audio = {
+  ensure: Sonidos.ensure,
+  tick: Sonidos.tick,
+  fanfare: Sonidos.ganador
+};
 
 /* ---------- Fondo de partículas ---------- */
 const Particles = React.memo(function Particles() {
@@ -657,6 +627,10 @@ function WinnerScreen({
     length: L
   }, () => Math.round((Math.random() - 0.5) * 60)), [L]);
   const land = (palabras.join("").length - 1) * PASO + 0.55;
+  useEffect(() => {
+    const t = setTimeout(Sonidos.impacto, land * 1000);
+    return () => clearTimeout(t);
+  }, []);
   let k = 0;
   return /*#__PURE__*/React.createElement("div", {
     className: "overlay",
@@ -696,6 +670,7 @@ function WinnerScreen({
     className: "win-btn",
     onClick: e => {
       e.stopPropagation();
+      Sonidos.pop();
       onClose();
     },
     autoFocus: true,
@@ -717,7 +692,14 @@ function App() {
   const [spinning, setSpinning] = useState(false);
   const [winner, setWinner] = useState(null); // { name, cedula, premioId, premio }
   const [fire, setFire] = useState(0);
-  const [muted, setMuted] = useState(false);
+  const [muted, setMuted] = useState(Sonidos.silencio);
+  useEffect(() => {
+    Sonidos.setSilencio(muted);
+  }, [muted]);
+  // llegada desde EMPEZAR (suena si el navegador ya permite audio en este sitio)
+  useEffect(() => {
+    if (window.__entrada) Sonidos.llegada();
+  }, []);
   const [theme, setTheme] = useState(document.documentElement.dataset.theme);
   const [drawer, setDrawer] = useState(false);
   useEffect(() => {
@@ -760,7 +742,6 @@ function App() {
     });
     return elegibles.map(a => cuenta[a.nombre] > 1 ? `${a.nombre} (…${a.cedula.slice(-3)})` : a.nombre);
   }, [clave]);
-  const audio = useAudio();
   const wheelRef = useRef(null);
   const pointerRef = useRef(null);
   const rot = useRef(0);
@@ -774,7 +755,6 @@ function App() {
   nRef.current = prizes.length;
   elegRef.current = elegibles;
   premioRef.current = premio;
-  audio.mutedRef.current = muted;
 
   /* ---------- datos del servidor ---------- */
   const latest = useRef({});
@@ -869,6 +849,7 @@ function App() {
     const n = nRef.current;
     if (anim.current || n < 2 || winner || !premioRef.current) return;
     audio.ensure();
+    Sonidos.girar();
     setDrawer(false);
     const idx = randomInt(n); // 🎯 el ganador se decide aquí, 1/N para cada uno
     const s = TAU / n;
@@ -1029,7 +1010,10 @@ function App() {
     className: "lbl"
   }, "\uD83C\uDF81 Sorteando"), pendientes.length ? /*#__PURE__*/React.createElement("select", {
     value: premio ? premio.id : "",
-    onChange: e => setPremioSel(e.target.value),
+    onChange: e => {
+      setPremioSel(e.target.value);
+      Sonidos.pop();
+    },
     disabled: spinning || !!winner,
     "aria-label": "Premio que se sortea"
   }, pendientes.map(p => /*#__PURE__*/React.createElement("option", {
