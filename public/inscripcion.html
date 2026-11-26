@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inscripción · Ruleta de Fin de Año</title>
+<link rel="icon" href="icono.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="marca.css">
+<script src="comun.js"></script>
+<style>
+  main{max-width:440px;margin:0 auto;padding:28px 20px 40px;display:flex;flex-direction:column;gap:20px;min-height:100dvh}
+  .logo{align-self:center}
+  h1{font-size:34px;line-height:1.05;text-align:center}
+  h1 span{color:var(--green)}
+  form{display:flex;flex-direction:column;gap:16px}
+  label{display:flex;flex-direction:column;gap:6px;font-weight:600}
+  .input{font-size:18px;padding:14px 16px}
+  .btn.grande{font-family:'Barlow Condensed',sans-serif;font-size:24px;letter-spacing:.06em;padding:14px;border-radius:999px}
+  .listo{text-align:center;display:flex;flex-direction:column;gap:14px;align-items:center;animation:pop .5s cubic-bezier(.2,1.5,.4,1)}
+  .listo .check{font-size:72px;line-height:1}
+  .listo h2{font-size:32px}
+  @keyframes pop{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:none}}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <img class="logo" src="logo.png" alt="Soluciones Hospitalarias de la Costa S.A.S">
+  <h1>Inscríbete en la <span>ruleta</span> 🎡</h1>
+
+  <form id="form" class="card" novalidate>
+    <label>Nombre completo
+      <input class="input" id="nombre" name="nombre" autocomplete="name" maxlength="80" required placeholder="Ej: María Fernanda Ruiz">
+    </label>
+    <label>Cédula
+      <input class="input" id="cedula" name="cedula" inputmode="numeric" autocomplete="off" maxlength="20" required placeholder="Solo números">
+    </label>
+    <p class="aviso" id="error" role="alert" hidden></p>
+    <button class="btn grande" id="enviar" type="submit">INSCRIBIRME</button>
+  </form>
+
+  <section class="card listo" id="listo" hidden aria-live="polite">
+    <div class="check">🎉</div>
+    <h2 id="saludo">¡Listo!</h2>
+    <p class="muted">Ya estás participando en la ruleta. ¡Mucha suerte!</p>
+    <button class="btn ghost" id="otra" type="button">Inscribir a otra persona</button>
+  </section>
+</main>
+<script>
+  const form = document.getElementById("form"), error = document.getElementById("error"), boton = document.getElementById("enviar");
+  const mostrarListo = (nombre) => {
+    document.getElementById("saludo").textContent = "¡Listo, " + nombre.split(" ")[0] + "!";
+    form.hidden = true; document.getElementById("listo").hidden = false;
+  };
+  try { const previo = localStorage.getItem("ruleta-inscrito"); if (previo) mostrarListo(previo); } catch (e) {}
+
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    error.hidden = true;
+    const nombre = form.nombre.value.trim(), cedula = form.cedula.value.replace(/[.\s-]/g, "");
+    if (nombre.length < 3) return mostrarError("Escribe tu nombre completo.", form.nombre);
+    if (!/^\d{4,15}$/.test(cedula)) return mostrarError("La cédula debe tener solo números (4 a 15 dígitos).", form.cedula);
+    boton.disabled = true; boton.textContent = "ENVIANDO…";
+    try {
+      const r = await api("registro", { method: "POST", body: { nombre, cedula }, admin: false });
+      try { localStorage.setItem("ruleta-inscrito", r.nombre); } catch (e) {}
+      mostrarListo(r.nombre);
+    } catch (e) {
+      mostrarError(e.status ? e.message : "No hay conexión. Revisa tu internet e inténtalo de nuevo.");
+    } finally { boton.disabled = false; boton.textContent = "INSCRIBIRME"; }
+  });
+  function mostrarError(msg, campo) { error.textContent = msg; error.hidden = false; campo?.focus(); }
+
+  document.getElementById("otra").addEventListener("click", () => {
+    try { localStorage.removeItem("ruleta-inscrito"); } catch (e) {}
+    form.reset(); form.hidden = false; document.getElementById("listo").hidden = true; form.nombre.focus();
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Configuración · Ruleta de Fin de Año</title>
+<link rel="icon" href="icono.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="marca.css">
+<script src="comun.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+<style>
+  header{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:20px 24px;max-width:1280px;margin:0 auto}
+  header h1{font-size:32px;margin-right:auto}
+  header nav{display:flex;gap:8px;flex-wrap:wrap}
+  main{max-width:1280px;margin:0 auto;padding:0 24px 40px;display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:20px;align-items:start}
+  @media (max-width:900px){main{grid-template-columns:1fr;padding:0 16px 32px} header{padding:16px}}
+  .card h2{font-size:26px;display:flex;align-items:center;gap:10px;margin-bottom:4px}
+  .ayuda{font-size:14px;margin-bottom:14px}
+  .guardado{font-size:13px;margin-left:auto;font-family:'Barlow',sans-serif;font-weight:500}
+
+  .premio{border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px;background:var(--surface2)}
+  .premio .fila{display:grid;grid-template-columns:auto minmax(0,1fr) 92px auto auto;gap:8px;align-items:center}
+  .orden{display:flex;flex-direction:column}
+  .orden button{border:none;background:none;cursor:pointer;font-size:13px;line-height:1;padding:3px 6px;color:var(--muted)}
+  .orden button:disabled{opacity:.25;cursor:default}
+  .premio .input{padding:9px 12px;background:var(--surface)}
+  .cant{text-align:center}
+  .estado-premio{font-size:13px;grid-column:2 / -1;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .ok{color:var(--accent);font-weight:600}
+  @media (max-width:560px){
+    .premio .fila{grid-template-columns:auto minmax(0,1fr) 70px auto}
+    .premio .fila .quien{grid-column:2 / -1;grid-row:2}
+  }
+  .panel{margin-top:10px;border-top:1px dashed var(--line);padding-top:10px}
+  .panel .acciones{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+  .panel .acciones .input{flex:1;min-width:160px;padding:8px 12px;background:var(--surface)}
+  .lista-chk{max-height:280px;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:2px 12px}
+  .lista-chk label{display:flex;gap:8px;align-items:center;padding:5px 4px;border-radius:8px;cursor:pointer;font-size:15px}
+  .lista-chk label:hover{background:var(--surface)}
+  .lista-chk input{accent-color:var(--green);width:17px;height:17px;flex:none}
+  .lista-chk .gano{opacity:.5;cursor:default}
+  .lista-chk small{color:var(--muted)}
+
+  table{width:100%;border-collapse:collapse;font-size:15px}
+  th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line)}
+  th{font-size:13px;color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--surface)}
+  .tabla{max-height:60vh;overflow:auto}
+  td .icon-btn{width:32px;height:32px;font-size:14px}
+  .acciones-evento{display:flex;flex-direction:column;gap:10px}
+  .acciones-evento .btn{width:100%}
+  .sep{height:1px;background:var(--line);margin:6px 0}
+  .lado{display:flex;flex-direction:column;gap:20px}
+  .vacio{padding:18px;text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <img class="logo" src="logo.png" alt="Soluciones Hospitalarias de la Costa S.A.S">
+  <h1>Configuración</h1>
+  <nav>
+    <button class="icon-btn" onclick="alternarTema()" title="Cambiar tema" aria-label="Cambiar tema">🌓</button>
+    <a class="btn ghost" href="index.html">📱 Inicio (QR)</a>
+    <a class="btn" href="ruleta.html">🎡 Ir a la ruleta</a>
+  </nav>
+</header>
+<main>
+  <section class="card">
+    <h2>🎁 Premios <span class="guardado muted" id="guardado" aria-live="polite"></span></h2>
+    <p class="ayuda muted">Se sortean en este orden. Cada unidad es un giro. Por defecto participan todos los inscritos que aún no han ganado.</p>
+    <p class="aviso" id="error" role="alert" hidden></p>
+    <div id="premios"></div>
+    <button class="btn ghost" id="agregar" type="button">＋ Agregar premio</button>
+  </section>
+
+  <div class="lado">
+    <section class="card">
+      <h2>📊 Evento</h2>
+      <div class="acciones-evento">
+        <button class="btn" id="exportar" type="button">⬇️ Exportar a Excel (asistencia y ganadores)</button>
+        <div class="sep"></div>
+        <button class="btn danger" id="reiniciar" type="button">↺ Reiniciar sorteo (borra ganadores)</button>
+        <button class="btn danger" id="borrarTodo" type="button">🗑 Borrar inscritos y ganadores</button>
+      </div>
+    </section>
+    <section class="card">
+      <h2>👥 Asistencia <span class="badge" id="nAsist">0</span></h2>
+      <div class="tabla">
+        <table>
+          <thead><tr><th>#</th><th>Nombre</th><th>Cédula</th><th>Hora</th><th></th></tr></thead>
+          <tbody id="asistentes"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</main>
+<script>
+/* ---------- estado ---------- */
+let premios = [];            // copia local editable (fuente de verdad mientras se edita)
+let asistentes = [], ganadores = [];
+const abiertos = new Set();  // premios con el panel "quién participa" abierto
+const busquedas = {};
+
+const $ = (id) => document.getElementById(id);
+function h(tag, props = {}, ...hijos) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k.startsWith("aria-")) el.setAttribute(k, String(v));
+    else if (k === "class") el.className = v;
+    else if (v === false || v == null) continue;
+    else if (k in el) el[k] = v;
+    else el.setAttribute(k, v);
+  }
+  el.append(...hijos.flat().filter((x) => x != null && x !== false));
+  return el;
+}
+const nuevoId = () => "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const entregados = (id) => ganadores.filter((g) => g.premioId === id).length;
+const ganoCedulas = () => new Set(ganadores.map((g) => g.cedula));
+
+function mostrarError(msg) { $("error").textContent = msg; $("error").hidden = !msg; }
+
+/* ---------- guardar premios (automático) ---------- */
+let timer = null, guardando = Promise.resolve();
+function programarGuardado() {
+  $("guardado").textContent = "Cambios sin guardar…";
+  clearTimeout(timer);
+  timer = setTimeout(guardar, 700);
+}
+async function guardar() {
+  clearTimeout(timer);
+  const envio = premios.map((p) => ({ ...p, nombre: p.nombre.trim() }));
+  if (envio.some((p) => !p.nombre)) { $("guardado").textContent = "Escribe el nombre de cada premio para guardar"; return; }
+  $("guardado").textContent = "Guardando…";
+  guardando = api("premios", { method: "PUT", body: { premios: envio } })
+    .then((d) => { aplicar(d, false); $("guardado").textContent = "Guardado ✓"; mostrarError(""); })
+    .catch((e) => { $("guardado").textContent = ""; mostrarError("No se guardó: " + e.message); });
+  return guardando;
+}
+window.addEventListener("beforeunload", (e) => { if (timer) { guardar(); e.preventDefault(); } });
+
+/* ---------- pintar ---------- */
+function renderPremios() {
+  const cont = $("premios");
+  if (!premios.length) { cont.replaceChildren(h("p", { class: "vacio muted" }, "Aún no hay premios. Agrega el primero.")); return; }
+  const gano = ganoCedulas();
+  cont.replaceChildren(...premios.map((p, i) => {
+    const total = asistentes.length;
+    const participan = asistentes.filter((a) => !gano.has(a.cedula) && !p.excluidos.includes(a.cedula)).length;
+    const ent = entregados(p.id);
+    const fila = h("div", { class: "fila" },
+      h("div", { class: "orden" },
+        h("button", { type: "button", title: "Subir", "aria-label": "Subir premio", disabled: i === 0, onclick: () => mover(i, -1) }, "▲"),
+        h("button", { type: "button", title: "Bajar", "aria-label": "Bajar premio", disabled: i === premios.length - 1, onclick: () => mover(i, 1) }, "▼")),
+      h("input", { class: "input", value: p.nombre, placeholder: "Nombre del premio", maxLength: 80, "aria-label": "Nombre del premio",
+        oninput: (e) => { p.nombre = e.target.value; programarGuardado(); } }),
+      h("input", { class: "input cant", type: "number", min: Math.max(1, ent), max: 500, value: p.cantidad, "aria-label": "Cantidad",
+        title: "Cantidad (unidades a sortear)",
+        oninput: (e) => { const v = parseInt(e.target.value, 10); if (v >= Math.max(1, ent)) { p.cantidad = v; programarGuardado(); } } }),
+      h("button", { class: "btn ghost quien", type: "button", "aria-expanded": abiertos.has(p.id),
+        onclick: () => { abiertos.has(p.id) ? abiertos.delete(p.id) : abiertos.add(p.id); renderPremios(); } },
+        `👥 Participan ${participan}`),
+      h("button", { class: "icon-btn", type: "button", title: "Eliminar premio", "aria-label": "Eliminar premio", onclick: () => eliminar(i) }, "🗑"));
+    const estado = h("div", { class: "estado-premio muted" },
+      ent >= p.cantidad ? h("span", { class: "ok" }, `✓ Entregado (${ent}/${p.cantidad})`) : h("span", {}, `Entregados ${ent} de ${p.cantidad}`),
+      p.excluidos.length ? h("span", {}, `${p.excluidos.length} excluido(s)`) : null,
+      total ? null : h("span", {}, "Aún no hay inscritos"));
+    return h("div", { class: "premio" }, fila, estado, abiertos.has(p.id) ? panelParticipantes(p) : null);
+  }));
+}
+
+function panelParticipantes(p) {
+  const gano = ganoCedulas();
+  const lista = h("div", { class: "lista-chk" });
+  const pintar = () => {
+    const q = (busquedas[p.id] || "").toLowerCase();
+    const visibles = asistentes.filter((a) => !q || a.nombre.toLowerCase().includes(q) || a.cedula.includes(q));
+    lista.replaceChildren(...(visibles.length ? visibles.map((a) => {
+      const yaGano = gano.has(a.cedula);
+      return h("label", { class: yaGano ? "gano" : "" },
+        h("input", { type: "checkbox", checked: !yaGano && !p.excluidos.includes(a.cedula), disabled: yaGano,
+          onchange: (e) => { marcar(p, [a.cedula], e.target.checked); } }),
+        h("span", {}, a.nombre, " ", h("small", {}, yaGano ? "(ya ganó)" : a.cedula)));
+    }) : [h("p", { class: "muted" }, asistentes.length ? "Nadie coincide con la búsqueda." : "Aún no hay inscritos.")]));
+  };
+  pintar();
+  const visiblesCed = () => {
+    const q = (busquedas[p.id] || "").toLowerCase();
+    return asistentes.filter((a) => !q || a.nombre.toLowerCase().includes(q) || a.cedula.includes(q)).map((a) => a.cedula);
+  };
+  return h("div", { class: "panel" },
+    h("div", { class: "acciones" },
+      h("input", { class: "input", type: "search", placeholder: "Buscar por nombre o cédula", value: busquedas[p.id] || "", "aria-label": "Buscar participante",
+        oninput: (e) => { busquedas[p.id] = e.target.value; pintar(); } }),
+      h("button", { class: "btn ghost", type: "button", onclick: () => marcar(p, visiblesCed(), true) }, "Marcar todos"),
+      h("button", { class: "btn ghost", type: "button", onclick: () => marcar(p, visiblesCed(), false) }, "Desmarcar todos")),
+    lista);
+}
+
+function marcar(p, cedulas, participa) {
+  const set = new Set(p.excluidos);
+  cedulas.forEach((c) => (participa ? set.delete(c) : set.add(c)));
+  p.excluidos = [...set];
+  renderPremios();
+  programarGuardado();
+}
+function mover(i, d) { [premios[i], premios[i + d]] = [premios[i + d], premios[i]]; renderPremios(); programarGuardado(); }
+function eliminar(i) {
+  const p = premios[i], ent = entregados(p.id);
+  const msg = ent ? `"${p.nombre}" ya tiene ${ent} ganador(es). Si lo eliminas, esos ganadores siguen en el historial pero el premio desaparece. ¿Eliminar?`
+                  : `¿Eliminar el premio "${p.nombre || "sin nombre"}"?`;
+  if (!confirm(msg)) return;
+  premios.splice(i, 1); renderPremios(); guardar();
+}
+$("agregar").addEventListener("click", () => {
+  premios.push({ id: nuevoId(), nombre: "", cantidad: 1, excluidos: [] });
+  renderPremios();
+  const inputs = $("premios").querySelectorAll(".premio .fila > .input:not(.cant)");
+  inputs[inputs.length - 1]?.focus();
+});
+
+function renderAsistentes() {
+  $("nAsist").textContent = asistentes.length;
+  const gano = new Map(ganadores.map((g) => [g.cedula, g.premio]));
+  $("asistentes").replaceChildren(...(asistentes.length ? asistentes.map((a, i) => h("tr", {},
+    h("td", { class: "muted" }, String(i + 1)),
+    h("td", {}, a.nombre, gano.has(a.cedula) ? h("div", { class: "muted", style: "font-size:13px" }, "🏆 " + gano.get(a.cedula)) : null),
+    h("td", {}, a.cedula),
+    h("td", { class: "muted" }, new Date(a.hora).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })),
+    h("td", {}, h("button", { class: "icon-btn", type: "button", title: "Quitar de la asistencia", "aria-label": "Quitar a " + a.nombre,
+      onclick: () => quitar(a) }, "🗑")))) : [h("tr", {}, h("td", { colSpan: 5, class: "vacio muted" }, "Aún no hay inscritos. Proyecta la página de inicio con el QR."))]));
+}
+
+/* ---------- datos del servidor ---------- */
+function aplicar(d, conPremios) {
+  asistentes = d.asistentes; ganadores = d.ganadores;
+  if (conPremios) premios = d.premios.map((p) => ({ ...p, excluidos: [...p.excluidos] }));
+  renderPremios(); renderAsistentes();
+}
+async function cargar(conPremios) {
+  try { aplicar(await api("estado"), conPremios); mostrarError(""); }
+  catch (e) { mostrarError(e.message); }
+}
+cargar(true);
+// refresca inscritos y ganadores sin tocar lo que estás editando
+setInterval(() => {
+  const editando = document.activeElement?.matches?.(".premio input:not([type=checkbox])");
+  if (!document.hidden && !timer && !editando) cargar(false);
+}, 5000);
+
+async function quitar(a) {
+  if (!confirm(`¿Quitar a ${a.nombre} (${a.cedula}) de la asistencia? Ya no participará en la ruleta.`)) return;
+  try { aplicar(await api("asistentes/" + encodeURIComponent(a.cedula), { method: "DELETE" }), false); }
+  catch (e) { mostrarError(e.message); }
+}
+$("reiniciar").addEventListener("click", async () => {
+  if (!confirm(`Se borrarán los ${ganadores.length} ganadores: todos vuelven a participar y los premios quedan sin entregar.\n\nExporta a Excel antes si quieres conservarlos. ¿Reiniciar?`)) return;
+  try { aplicar(await api("reiniciar", { method: "POST" }), false); } catch (e) { mostrarError(e.message); }
+});
+$("borrarTodo").addEventListener("click", async () => {
+  if (!confirm(`Se borrarán los ${asistentes.length} inscritos y los ${ganadores.length} ganadores. Los premios se conservan.\n\nEsto no se puede deshacer. Exporta a Excel antes. ¿Continuar?`)) return;
+  if (prompt('Para confirmar escribe BORRAR') !== "BORRAR") return;
+  try { aplicar(await api("asistentes", { method: "DELETE" }), false); } catch (e) { mostrarError(e.message); }
+});
+
+/* ---------- Excel ---------- */
+$("exportar").addEventListener("click", async () => {
+  if (!window.XLSX) { mostrarError("No se pudo cargar el exportador de Excel. Revisa la conexión."); return; }
+  await cargar(false);
+  const libro = XLSX.utils.book_new();
+  const asis = asistentes.map((a, i) => ({ "N°": i + 1, "Nombre": a.nombre, "Cédula": a.cedula, "Fecha y hora de inscripción": fmtHora(a.hora) }));
+  const orden = new Map(premios.map((p, i) => [p.id, i]));
+  const unidad = {};
+  const gan = [...ganadores]
+    .sort((a, b) => (orden.get(a.premioId) ?? 999) - (orden.get(b.premioId) ?? 999) || a.hora.localeCompare(b.hora))
+    .map((g) => ({ "Premio": g.premio, "Unidad": (unidad[g.premioId] = (unidad[g.premioId] || 0) + 1),
+                   "Ganador": g.nombre, "Cédula": g.cedula, "Fecha y hora": fmtHora(g.hora) }));
+  const hoja = (filas, cols, anchos) => {
+    const ws = XLSX.utils.json_to_sheet(filas, { header: cols });
+    ws["!cols"] = anchos.map((wch) => ({ wch }));
+    return ws;
+  };
+  XLSX.utils.book_append_sheet(libro, hoja(asis, ["N°", "Nombre", "Cédula", "Fecha y hora de inscripción"], [6, 36, 16, 26]), "Asistencia");
+  XLSX.utils.book_append_sheet(libro, hoja(gan, ["Premio", "Unidad", "Ganador", "Cédula", "Fecha y hora"], [30, 8, 36, 16, 22]), "Ganadores");
+  XLSX.writeFile(libro, `ruleta-asistencia-y-ganadores-${new Date().toISOString().slice(0, 10)}.xlsx`);
+});
+</script>
+</body>
+</html>

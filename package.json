@@ -1,0 +1,16 @@
+{
+  "name": "ruleta-soluciones-hospitalarias",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "local": "node dev.mjs",
+    "test": "node --test lib/logica.test.mjs",
+    "build-ruleta": "node fuente/build.mjs"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
+  },
+  "devDependencies": {
+    "@babel/standalone": "7.24.7"
+  }
+}
