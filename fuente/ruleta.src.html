@@ -285,10 +285,8 @@
   }
   html.entrada .espera-aro{animation:llega 1.2s cubic-bezier(.2,1.25,.4,1) .1s both}
   .gracias .sub{max-width:calc(var(--u)*110);color:var(--text)}
-  .gracias-cifra{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:calc(var(--u)*2.6);color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
   .gracias .espera-aro::before{border-style:solid;border-color:var(--lime)}
-  @media (max-aspect-ratio:1/1){.gracias-cifra{font-size:15px}}
-  html.entrada .espera .logo,html.entrada .espera h1,html.entrada .espera .sub,html.entrada .gracias-cifra{animation:subir .7s cubic-bezier(.2,1.3,.4,1) .45s both}
+  html.entrada .espera .logo,html.entrada .espera h1,html.entrada .espera .sub{animation:subir .7s cubic-bezier(.2,1.3,.4,1) .45s both}
   @keyframes subir{from{transform:translateY(30px);opacity:0}to{transform:none;opacity:1}}
   .espera.saliendo .logo,.espera.saliendo h1,.espera.saliendo .sub,.espera.saliendo .tools{animation:desvanecer .35s forwards}
   .espera.saliendo .espera-aro{animation:salirAro .55s cubic-bezier(.5,0,.75,0) .05s forwards}
@@ -850,9 +848,7 @@ function App() {
         <div className="espera-aro" ref={esperaAro}><span aria-hidden="true">{terminado ? "🎉" : "🎁"}</span></div>
         <h1>{terminado ? CONFIG.gracias : "¿Qué premio sigue?"}</h1>
         <p className="sub" role="status">{error ? "⚠️ " + error
-          : terminado ? CONFIG.graciasMensaje : "Preparando el próximo sorteo…"}</p>
-        {terminado && !error && <p className="gracias-cifra">{datos.ganadores.length} {datos.ganadores.length === 1 ? "ganador" : "ganadores"} · {datos.asistentes.length} participantes</p>}
-      </main>
+          : terminado ? CONFIG.graciasMensaje : "Preparando el próximo sorteo…"}</p>      </main>
     </>
   );
 
