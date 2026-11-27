@@ -18,7 +18,7 @@
     window.__entrada = true;
     history.replaceState(null, "", location.pathname);
     // si el navegador pausa animaciones, la cortina no se queda: todo termina antes de 1.8 s
-    setTimeout(() => document.documentElement.classList.remove("entrada"), 1800);
+    window.__tEntrada = setTimeout(() => document.documentElement.classList.remove("entrada"), 1800);
   }
 </script>
 <style>
@@ -74,10 +74,7 @@
   .premio-actual{display:flex;flex-direction:column;gap:calc(var(--u)*.4);padding:calc(var(--u)*1) calc(var(--u)*2);border-radius:calc(var(--u)*2);
     border:1px solid var(--line);background:var(--surface);box-shadow:var(--shadow)}
   .premio-actual .lbl{font-size:calc(var(--u)*1.6);font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
-  .premio-actual select,.sin-premio{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:calc(var(--u)*3);color:var(--text);
-    background:transparent;border:none;outline:none;width:100%;cursor:pointer;text-decoration:none;text-overflow:ellipsis}
-  .premio-actual select option{font-size:16px;color:#0b0146;background:#fff}
-  .premio-actual:focus-within{border-color:var(--green)}
+  .premio-nombre{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:calc(var(--u)*3);line-height:1.1;color:var(--text)}
   .spin-btn{
     font-family:'Barlow Condensed',sans-serif;font-size:calc(var(--u)*4.2);font-weight:700;letter-spacing:.1em;
     border:none;cursor:pointer;color:#fff;padding:calc(var(--u)*1.4) 0;border-radius:999px;
@@ -268,6 +265,31 @@
   html.entrada .parts,html.entrada .tools{animation:desdeDer .7s cubic-bezier(.2,1.3,.4,1) .55s both}
   @keyframes desdeIzq{from{transform:translateX(-40px);opacity:0}to{transform:none;opacity:1}}
   @keyframes desdeDer{from{transform:translateX(40px);opacity:0}to{transform:none;opacity:1}}
+
+  /* espera entre premios: no muestra cuál sigue. Al llegar uno, sale igual que el inicio con EMPEZAR */
+  .espera{position:relative;z-index:1;width:100vw;height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:calc(var(--u)*3);padding:calc(var(--u)*4);text-align:center}
+  .espera .logo{align-self:center}
+  .espera h1{font-size:calc(var(--u)*9)}
+  .espera .sub{display:block;font-size:calc(var(--u)*3)}
+  .espera-aro{position:relative;width:calc(var(--u)*30);aspect-ratio:1;display:grid;place-items:center}
+  .espera-aro::before{content:"";position:absolute;inset:0;border-radius:50%;border:calc(var(--u)*.8) dashed var(--lime);animation:aro 14s linear infinite}
+  .espera-aro span{width:72%;aspect-ratio:1;border-radius:50%;display:grid;place-items:center;font-size:calc(var(--u)*11);
+    background:radial-gradient(circle at 35% 30%,#7cc98a,var(--green) 60%,var(--green-d));box-shadow:0 calc(var(--u)*1.5) calc(var(--u)*4) rgba(11,1,70,.25);
+    animation:latido 2.4s ease-in-out infinite}
+  @keyframes aro{to{transform:rotate(360deg)}}
+  @keyframes latido{50%{transform:scale(1.05)}}
+  @media (max-aspect-ratio:1/1){
+    .espera .logo{height:56px} .espera h1{font-size:40px} .espera .sub{font-size:18px}
+    .espera-aro{width:min(60vw,40dvh)} .espera-aro span{font-size:min(20vw,13dvh)}
+  }
+  .espera.saliendo .logo,.espera.saliendo h1,.espera.saliendo .sub,.espera.saliendo .tools{animation:desvanecer .35s forwards}
+  .espera.saliendo .espera-aro{animation:salirAro .55s cubic-bezier(.5,0,.75,0) .05s forwards}
+  @keyframes salirAro{to{transform:scale(.2) rotate(25deg);opacity:0}}
+  @keyframes desvanecer{to{opacity:0}}
+  .cortina{position:fixed;z-index:50;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;background:#56b167;
+    pointer-events:none;transform:scale(0);animation:cubrir .6s cubic-bezier(.6,0,.4,1) .2s forwards}
+  @keyframes cubrir{to{transform:scale(var(--s))}}
   @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 </style>
 </head>
@@ -689,7 +711,12 @@ function App() {
     premios: [],
     ganadores: []
   });
-  const [premioSel, setPremioSel] = useState(null); // premio elegido a mano (si no, el primero con unidades)
+  // espera -> revelando (cortina) -> juego; el premio lo envía la configuración (datos.enJuego)
+  const [vista, setVista] = useState("espera");
+  const [enVista, setEnVista] = useState(null); // premio que se reveló
+  const vistaRef = useRef(vista);
+  vistaRef.current = vista;
+  const esperaAro = useRef(null);
   const [error, setError] = useState("");
   const [cargado, setCargado] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -745,14 +772,14 @@ function App() {
         restantes: p.cantidad - entregados
       };
     });
-    const premio = premios.find(p => p.id === premioSel && p.restantes > 0) || premios.find(p => p.restantes > 0) || null;
+    const premio = premios.find(p => p.id === datos.enJuego && p.restantes > 0) || null;
     const elegibles = datos.asistentes.filter(a => !gano.has(a.cedula) && !(premio && premio.excluidos.includes(a.cedula)));
     return {
       premios,
       premio,
       elegibles
     };
-  }, [datos, premioSel]);
+  }, [datos]);
 
   // nombres en la ruleta; si dos personas se llaman igual se distinguen con el final de la cédula
   const clave = elegibles.map(a => a.cedula).join("|");
@@ -803,12 +830,48 @@ function App() {
     }
   }, []);
   useEffect(() => {
-    cargar();
-    const t = setInterval(() => {
-      if (!document.hidden && !anim.current && !latest.current.winner) cargar();
-    }, 5000);
-    return () => clearInterval(t);
+    let t;
+    const ciclo = async () => {
+      if (!document.hidden && !anim.current && !latest.current.winner) await cargar();
+      t = setTimeout(ciclo, vistaRef.current === "juego" ? 5000 : 2000); // en espera responde rápido al premio enviado
+    };
+    ciclo();
+    return () => clearTimeout(t);
   }, [cargar]);
+
+  // misma transición que EMPEZAR en el inicio: la cortina verde crece desde el aro y la ruleta llega girando
+  const revelar = id => {
+    setVista("revelando");
+    if (Sonidos.ensure()?.state === "running") Sonidos.empezar();
+    let hecho = false,
+      c = null;
+    const fin = () => {
+      if (hecho) return;
+      hecho = true;
+      const h = document.documentElement;
+      h.classList.remove("entrada");
+      void h.offsetWidth;
+      h.classList.add("entrada");
+      clearTimeout(window.__tEntrada);
+      window.__tEntrada = setTimeout(() => h.classList.remove("entrada"), 1800);
+      c?.remove();
+      setEnVista(id);
+      setVista("juego");
+      Sonidos.llegada();
+    };
+    const aro = esperaAro.current;
+    if (!aro || matchMedia("(prefers-reduced-motion: reduce)").matches) return fin();
+    const r = aro.getBoundingClientRect();
+    const x = r.left + r.width / 2,
+      y = r.top + r.height / 2;
+    const radio = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+    c = document.createElement("div");
+    c.className = "cortina";
+    c.style.cssText = `left:${x}px;top:${y}px;--s:${radio * 2 / 40 + 1}`;
+    document.body.append(c);
+    c.addEventListener("animationend", fin);
+    setTimeout(fin, 1200); // por si el navegador pausa la animación
+  };
   const flickAnim = useRef(null);
   const flick = () => {
     const el = pointerRef.current;
@@ -893,7 +956,7 @@ function App() {
   }, []);
   const spin = useCallback((dir = 1, speed = 0) => {
     const n = nRef.current;
-    if (anim.current || n < 2 || winner || !premioRef.current) return;
+    if (anim.current || n < 2 || winner || !premioRef.current || vistaRef.current !== "juego") return;
     audio.ensure();
     Sonidos.girar();
     setDrawer(false);
@@ -1006,15 +1069,17 @@ function App() {
       setGuardando(false);
     }
   };
+
+  // tras el ganador (el servidor libera el premio) o si se retira o cambia desde la configuración, vuelve la espera
+  const premioId = premio ? premio.id : null;
+  useEffect(() => {
+    if (spinning || winner) return;
+    if (vista === "juego" && premioId !== enVista) setVista("espera");else if (vista === "espera" && premioId) revelar(premioId);
+  }, [vista, premioId, enVista, spinning, winner]);
   const n = prizes.length;
-  const pendientes = premios.filter(p => p.restantes > 0);
   const ganadores = datos.ganadores;
   const textoBoton = spinning ? "GIRANDO…" : !cargado ? "CARGANDO…" : !premio ? premios.length ? "PREMIOS ENTREGADOS" : "CONFIGURA PREMIOS" : n < 2 ? "FALTAN PARTICIPANTES" : "¡GIRAR!";
-  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Particles, null), /*#__PURE__*/React.createElement("main", {
-    className: "stage" + (spinning ? " girando" : "")
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "tools"
-  }, /*#__PURE__*/React.createElement("button", {
+  const botones = /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
     className: "icon-btn",
     onClick: () => setTheme(t => t === "dark" ? "light" : "dark"),
     title: "Cambiar tema",
@@ -1024,7 +1089,30 @@ function App() {
     onClick: () => setMuted(m => !m),
     title: "Sonido",
     "aria-label": "Sonido"
-  }, muted ? "🔇" : "🔊"), /*#__PURE__*/React.createElement("button", {
+  }, muted ? "🔇" : "🔊"));
+  if (vista !== "juego") return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Particles, null), /*#__PURE__*/React.createElement("main", {
+    className: "espera" + (vista === "revelando" ? " saliendo" : ""),
+    onPointerDown: () => audio.ensure()
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "tools"
+  }, botones), /*#__PURE__*/React.createElement("img", {
+    className: "logo",
+    src: LOGO,
+    alt: "Soluciones Hospitalarias de la Costa S.A.S"
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "espera-aro",
+    ref: esperaAro
+  }, /*#__PURE__*/React.createElement("span", {
+    "aria-hidden": "true"
+  }, "\uD83C\uDF81")), /*#__PURE__*/React.createElement("h1", null, "\xBFQu\xE9 premio sigue?"), /*#__PURE__*/React.createElement("p", {
+    className: "sub",
+    role: "status"
+  }, error ? "⚠️ " + error : "Preparando el próximo sorteo…")));
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Particles, null), /*#__PURE__*/React.createElement("main", {
+    className: "stage" + (spinning ? " girando" : "")
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "tools"
+  }, botones, /*#__PURE__*/React.createElement("button", {
     className: "icon-btn menu",
     onClick: () => setDrawer(true),
     title: "Panel",
@@ -1054,25 +1142,13 @@ function App() {
     "aria-hidden": "true"
   })), /*#__PURE__*/React.createElement("section", {
     className: "ctrl"
-  }, /*#__PURE__*/React.createElement("label", {
+  }, /*#__PURE__*/React.createElement("div", {
     className: "premio-actual"
   }, /*#__PURE__*/React.createElement("span", {
     className: "lbl"
-  }, "\uD83C\uDF81 Sorteando"), pendientes.length ? /*#__PURE__*/React.createElement("select", {
-    value: premio ? premio.id : "",
-    onChange: e => {
-      setPremioSel(e.target.value);
-      Sonidos.pop();
-    },
-    disabled: spinning || !!winner,
-    "aria-label": "Premio que se sortea"
-  }, pendientes.map(p => /*#__PURE__*/React.createElement("option", {
-    key: p.id,
-    value: p.id
-  }, p.nombre, p.cantidad > 1 ? ` · ${p.entregados + 1} de ${p.cantidad}` : ""))) : /*#__PURE__*/React.createElement("a", {
-    className: "sin-premio",
-    href: "config.html"
-  }, premios.length ? "🎉 Todos entregados" : "Configura los premios →")), /*#__PURE__*/React.createElement("button", {
+  }, "\uD83C\uDF81 Sorteando"), /*#__PURE__*/React.createElement("span", {
+    className: "premio-nombre"
+  }, premio ? premio.nombre + (premio.cantidad > 1 ? ` · ${premio.entregados + 1} de ${premio.cantidad}` : "") : "—")), /*#__PURE__*/React.createElement("button", {
     className: "spin-btn",
     onClick: () => spin(),
     disabled: spinning || n < 2 || !!winner || !premio

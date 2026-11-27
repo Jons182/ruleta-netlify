@@ -30,6 +30,9 @@
   .cant{text-align:center}
   .estado-premio{font-size:13px;grid-column:2 / -1;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
   .ok{color:var(--accent);font-weight:600}
+  .estado-premio .enviar{margin-left:auto;padding:6px 14px;font-size:14px}
+  .premio.en-juego{border-color:var(--green);box-shadow:0 0 0 2px var(--green) inset}
+  .en-ruleta{color:var(--accent);font-weight:700}
   @media (max-width:560px){
     .premio .fila{grid-template-columns:auto minmax(0,1fr) 70px auto}
     .premio .fila .quien{grid-column:2 / -1;grid-row:2}
@@ -74,7 +77,7 @@
 <main>
   <section class="card">
     <h2>🎁 Premios <span class="guardado muted" id="guardado" aria-live="polite"></span></h2>
-    <p class="ayuda muted">Se sortean en este orden. Cada unidad es un giro. Por defecto participan todos los inscritos que aún no han ganado.</p>
+    <p class="ayuda muted">Cada unidad es un giro. Pulsa <b>Enviar a la ruleta</b> en el premio que sigue: la ruleta sale de la pantalla de espera con ese premio y vuelve a ella tras el ganador. Por defecto participan todos los inscritos que aún no han ganado.</p>
     <p class="aviso" id="error" role="alert" hidden></p>
     <div id="premios"></div>
     <button class="btn ghost" id="agregar" type="button">＋ Agregar premio</button>
@@ -111,6 +114,7 @@
 <script>
 let premios = [];            // copia local editable (fuente de verdad mientras se edita)
 let asistentes = [], ganadores = [];
+let enJuego = null;          // premio enviado a la ruleta (null = la ruleta está en espera)
 const abiertos = new Set();  // premios con el panel "quién participa" abierto
 const busquedas = {};
 
@@ -155,7 +159,7 @@ async function guardar() {
   $("guardado").textContent = "Guardando…";
   guardando = api("premios", { method: "PUT", body: { premios: envio } })
     .then((d) => {
-      asistentes = d.asistentes; ganadores = d.ganadores;
+      asistentes = d.asistentes; ganadores = d.ganadores; enJuego = d.enJuego;
       if (!editandoPremio()) renderPremios();          // no redibujar si ya pasaste a otro campo
       renderAsistentes(); $("guardado").textContent = "Guardado ✓"; mostrarError("");
     })
@@ -185,11 +189,16 @@ function renderPremios() {
         onclick: () => { abiertos.has(p.id) ? abiertos.delete(p.id) : abiertos.add(p.id); renderPremios(); } },
         `👥 Participan ${participan}`),
       h("button", { class: "icon-btn", type: "button", title: "Eliminar premio", "aria-label": "Eliminar premio", onclick: () => eliminar(i) }, "🗑"));
+    const enRuleta = enJuego === p.id;
     const estado = h("div", { class: "estado-premio muted" },
       ent >= p.cantidad ? h("span", { class: "ok" }, `✓ Entregado (${ent}/${p.cantidad})`) : h("span", {}, `Entregados ${ent} de ${p.cantidad}`),
       p.excluidos.length ? h("span", {}, `${p.excluidos.length} excluido(s)`) : null,
-      total ? null : h("span", {}, "Aún no hay inscritos"));
-    return h("div", { class: "premio" }, fila, estado, abiertos.has(p.id) ? panelParticipantes(p) : null);
+      total ? null : h("span", {}, "Aún no hay inscritos"),
+      enRuleta ? h("span", { class: "en-ruleta" }, "🎡 En la ruleta") : null,
+      enRuleta ? h("button", { class: "btn ghost enviar", type: "button", onclick: () => enviar(null) }, "Retirar")
+        : ent < p.cantidad ? h("button", { class: "btn enviar", type: "button", disabled: participan < 2,
+            title: participan < 2 ? "Se necesitan al menos 2 participantes" : "", onclick: () => enviar(p.id) }, "🎡 Enviar a la ruleta") : null);
+    return h("div", { class: "premio" + (enRuleta ? " en-juego" : "") }, fila, estado, abiertos.has(p.id) ? panelParticipantes(p) : null);
   }));
 }
 
@@ -219,6 +228,14 @@ function panelParticipantes(p) {
       h("button", { class: "btn ghost", type: "button", onclick: () => marcar(p, visiblesCed(), true) }, "Marcar todos"),
       h("button", { class: "btn ghost", type: "button", onclick: () => marcar(p, visiblesCed(), false) }, "Desmarcar todos")),
     lista);
+}
+
+// guarda antes lo pendiente, para que la ruleta reciba el nombre y los participantes actuales
+async function enviar(premioId) {
+  if (timer || pendiente) await guardar();
+  await guardando;
+  try { aplicar(await api("enjuego", { method: "PUT", body: { premioId } }), false); mostrarError(""); }
+  catch (e) { mostrarError(e.message); }
 }
 
 function marcar(p, cedulas, participa) {
@@ -257,7 +274,7 @@ function renderAsistentes() {
 
 let evento = "";   // código del evento vigente (la inscripción manual lo necesita)
 function aplicar(d, conPremios) {
-  asistentes = d.asistentes; ganadores = d.ganadores; evento = d.evento || "";
+  asistentes = d.asistentes; ganadores = d.ganadores; evento = d.evento || ""; enJuego = d.enJuego;
   if (conPremios) premios = d.premios.map((p) => ({ ...p, excluidos: [...p.excluidos] }));
   renderPremios(); renderAsistentes();
 }
@@ -265,7 +282,7 @@ let firma = "";  // solo se redibuja si cambió algo desde la última consulta
 async function cargar(conPremios) {
   try {
     const d = await api("estado");
-    const nueva = JSON.stringify([d.asistentes, d.ganadores, d.evento]);
+    const nueva = JSON.stringify([d.asistentes, d.ganadores, d.evento, d.enJuego]);
     if (conPremios || nueva !== firma) { firma = nueva; aplicar(d, conPremios); }
     mostrarError("");
   } catch (e) { mostrarError(e.message); }

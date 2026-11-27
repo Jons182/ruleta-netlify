@@ -4,8 +4,8 @@
 |---|---|---|
 | `/` (inicio) | QR de inscripción + contador de inscritos | Se proyecta |
 | `/inscripcion.html` | Formulario de nombre y cédula | Los asistentes, al escanear el QR |
-| `/config.html` | Premios, quién participa, asistencia, Excel, reinicios | Administrador |
-| `/ruleta.html` | La ruleta | Se proyecta |
+| `/config.html` | Premios, quién participa, asistencia, Excel, reinicios y **Enviar a la ruleta** | Administrador |
+| `/ruleta.html` | Pantalla de espera y la ruleta con el premio enviado; vuelve a la espera tras cada ganador | Se proyecta |
 
 Inicio, configuración y ruleta piden el **PIN de administrador** una vez por pestaña.
 La inscripción es la única página pública.
