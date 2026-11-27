@@ -195,12 +195,8 @@
     text-shadow:0 .035em 0 #3d8f4d,0 .07em 0 #2e6e3b,0 .1em 0 #1d4a28,0 .14em .12em rgba(0,0,0,.5),0 0 .4em rgba(163,201,29,.5);
     will-change:transform,opacity;
     animation:zoomin .8s cubic-bezier(.16,1.45,.4,1) var(--d) both,wave 2.2s ease-in-out calc(var(--land) + var(--d)) infinite}
+  /* sin filter:blur: desenfocar letras gigantes costaba ~1 s de cuadros perdidos al aparecer el ganador */
   @keyframes zoomin{0%{transform:scale(8) rotate(var(--r));opacity:0}50%{opacity:1}100%{transform:none;opacity:1}}
-  /* desenfoque de entrada solo en equipos con mouse (en celular el blur de letras gigantes es muy costoso) */
-  @media (hover:hover) and (pointer:fine){
-    @keyframes zoomin{0%{transform:scale(8) rotate(var(--r));opacity:0;filter:blur(.12em)}
-      50%{opacity:1;filter:blur(0)}100%{transform:none;opacity:1}}
-  }
   @keyframes wave{0%,100%{transform:none}50%{transform:translateY(-.06em) scale(1.07)}}
   /* con el ganador en pantalla, lo de atrás no se pinta */
   body.con-ganador .stage, body.con-ganador .particles{visibility:hidden}
@@ -267,7 +263,8 @@
   @keyframes desdeDer{from{transform:translateX(40px);opacity:0}to{transform:none;opacity:1}}
 
   /* espera entre premios: no muestra cuál sigue. Al llegar uno, sale igual que el inicio con EMPEZAR */
-  .espera{position:relative;z-index:1;width:100vw;height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  .stage.oculto{visibility:hidden}
+  .espera{position:fixed;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;
     gap:calc(var(--u)*3);padding:calc(var(--u)*4);text-align:center}
   .espera .logo{align-self:center}
   .espera h1{font-size:calc(var(--u)*9)}
@@ -687,8 +684,12 @@ function App() {
     );
   };
 
+  // el bucle solo corre con la ruleta en pantalla; en la espera no hay nada que mover
+  const ruedaVisible = vista === "juego" || vista === "cerrando";
   useEffect(() => {
-    let raf, last = performance.now(), ultimoGolpe = 0;
+    if (!ruedaVisible) return;
+    mostrado.current = { idx: -1, lista: null };     // la ruleta se volvió a montar: la barra del nombre está vacía
+    let raf, last = performance.now(), ultimoGolpe = 0, escrito = null;
     // a máxima velocidad cambia de nombre casi cada cuadro: un golpe cada 45 ms basta y no satura el audio
     const golpe = (now) => { if (now - ultimoGolpe < 45) return; ultimoGolpe = now; flick(); audio.tick(); };
     // nombre bajo la flecha: solo se toca el DOM cuando cambia el nombre (sin re-render de React)
@@ -726,12 +727,12 @@ function App() {
         lastIdx.current = idx;
       }
       pintarNombre(lastIdx.current);
-      if (wheelRef.current) wheelRef.current.style.transform = `rotate(${rot.current}deg)`;
+      if (wheelRef.current && rot.current !== escrito) { escrito = rot.current; wheelRef.current.style.transform = `rotate(${escrito}deg)`; }
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, []);
+  }, [ruedaVisible]);
 
   const spin = useCallback((dir = 1, speed = 0) => {
     const n = nRef.current;
@@ -803,8 +804,12 @@ function App() {
     setGuardando(true);
     try {
       const d = await api("ganador", { method: "POST", body: { premioId: winner.premioId, cedula: winner.cedula } });
-      latest.current.winner = null;
-      firmaRef.current = JSON.stringify(d); setDatos(d); setWinner(null); setError("");
+      // la cortina sale del botón y tapa al ganador; debajo se pasa directo a la espera sin volver a pintar la ruleta
+      await new Promise((listo) => cambiarCon(document.querySelector(".win-btn"), () => {
+        latest.current.winner = null;
+        firmaRef.current = JSON.stringify(d); setDatos(d); setWinner(null); setError(""); setVista("espera");
+        listo();
+      }));
     } catch (e) {
       if (e.status === 409) {                         // rechazo del servidor (p. ej. premio borrado): reintentar no sirve
         avisar(e.message, "No se registró el ganador");
@@ -839,23 +844,21 @@ function App() {
 
   // sin unidades por entregar (y con premios creados) la espera pasa a ser el agradecimiento final
   const terminado = premios.length > 0 && premios.every((p) => p.restantes <= 0);
-  if (vista === "espera" || vista === "revelando") return (
+  // la ruleta queda montada y oculta bajo la espera: así ya está dibujada cuando la cortina se retira
+  const esperando = vista === "espera" || vista === "revelando";
+
+  return (
     <>
       <Particles />
-      <main className={"espera" + (terminado ? " gracias" : "") + (vista === "revelando" ? " saliendo" : "")} onPointerDown={() => audio.ensure()}>
+      {esperando && <main className={"espera" + (terminado ? " gracias" : "") + (vista === "revelando" ? " saliendo" : "")} onPointerDown={() => audio.ensure()}>
         <div className="tools">{botones}</div>
         <img className="logo" src={LOGO} alt="Soluciones Hospitalarias de la Costa S.A.S" />
         <div className="espera-aro" ref={esperaAro}><span aria-hidden="true">{terminado ? "🎉" : "🎁"}</span></div>
         <h1>{terminado ? CONFIG.gracias : "¿Qué premio sigue?"}</h1>
         <p className="sub" role="status">{error ? "⚠️ " + error
-          : terminado ? CONFIG.graciasMensaje : "Preparando el próximo sorteo…"}</p>      </main>
-    </>
-  );
-
-  return (
-    <>
-      <Particles />
-      <main className={"stage" + (spinning || vista === "cerrando" ? " girando" : "")}>
+          : terminado ? CONFIG.graciasMensaje : "Preparando el próximo sorteo…"}</p>
+      </main>}
+      <main className={"stage" + (spinning || vista === "cerrando" ? " girando" : "") + (esperando ? " oculto" : "")}>
         <div className="tools">
           {botones}
           <button className="icon-btn menu" onClick={() => setDrawer(true)}
